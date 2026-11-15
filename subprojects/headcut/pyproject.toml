@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "headcut"
+version = "0.1.0"
+description = "检测主体人脸并批量裁切含头部/上半身的正方形头像, 输出指定尺寸, 适合 LoRA 训练素材制作"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "headcut contributors" }]
+keywords = ["face-detection", "image-crop", "avatar", "lora", "yunet", "opencv"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "opencv-python-headless>=4.8",
+    "numpy>=1.24",
+    "pillow>=9.5",
+]
+
+[project.optional-dependencies]
+# 安装方式: pip install -e ".[bg]" (国内加 -i 腾讯云镜像)
+bg = ["rembg>=2.0.50", "onnxruntime>=1.16"]
+
+[project.scripts]
+headcut = "headcut.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["headcut*"]
+
+[tool.setuptools.package-data]
+"headcut.models" = ["*.onnx"]

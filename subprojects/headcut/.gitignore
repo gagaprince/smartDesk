@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 工具输出
+output/
+annotated/
+demo_output/
+demo_debug/
+
+# rembg 背景去除模型 (体积大, 首次使用自动下载)
+headcut/models/rembg/
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

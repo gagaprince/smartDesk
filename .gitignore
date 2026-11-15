@@ -1,0 +1,45 @@
+.DS_Store
+node_modules
+/dist
+
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+#Electron-builder output
+/dist_electron
+# local run/build logs
+*.log
+
+# Python 子项目 (subprojects/headcut)
+subprojects/**/.venv/
+subprojects/**/venv/
+subprojects/**/__pycache__/
+subprojects/**/*.py[cod]
+subprojects/**/*.egg-info/
+subprojects/**/demo_output/
+# rembg 背景分割模型体积较大, 首次使用时自动从国内镜像下载
+subprojects/headcut/headcut/models/rembg/
+
+# Python 子项目 (subprojects/comfyui-ctrl FastAPI 服务)
+# .venv / __pycache__ 已由上方 subprojects/** 规则覆盖
+subprojects/comfyui-ctrl/.env
+subprojects/comfyui-ctrl/workflows/outputs/
+subprojects/comfyui-ctrl/workflows/backups/
+subprojects/comfyui-ctrl/doc/

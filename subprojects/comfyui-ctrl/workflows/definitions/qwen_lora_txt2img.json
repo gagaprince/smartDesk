@@ -1,0 +1,69 @@
+{
+  "workflow_id": "qwen_lora_txt2img",
+  "name": "千问 LoRA 文生图（turbo）",
+  "description": "Qwen Image 2.1 turbo 固定 8 步采样，支持提示词、单 LoRA 插槽、种子与宽高比注入",
+  "template": "qwen_lora_txt2img.api.json",
+  "output_node": "36",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "提示词",
+      "type": "string",
+      "required": true,
+      "multiline": true,
+      "default": "一位成年动漫女性头像，长发披肩，发丝柔顺，发尾带轻微波浪卷，面容美丽精致，眼神亲和温柔，嘴角有淡淡笑意，气质中带有一点含蓄的性感妩媚，穿着浅绿色一字肩针织上衣，肩颈线条优雅但画面优雅克制，半身近景构图，主色调为浅蓝色与浅绿色，背景是柔和的浅蓝渐变和淡淡薄荷绿色光晕，精致日系动漫插画风，皮肤通透，发丝细腻，柔和自然光，低饱和清新色彩，画面干净，适合作为个人头像",
+      "paths": [
+        ["1021", "inputs", "prompt"],
+        ["1024", "inputs", "on_false"]
+      ]
+    },
+    {
+      "key": "lora_enabled",
+      "label": "启用 LoRA",
+      "type": "bool",
+      "default": true,
+      "path": ["35", "inputs", "lora_2", "on"]
+    },
+    {
+      "key": "lora_name",
+      "label": "LoRA 模型",
+      "type": "enum",
+      "enum_source": "comfyui_loras",
+      "default": "qwen\\南宫婉.safetensors",
+      "path": ["35", "inputs", "lora_2", "lora"]
+    },
+    {
+      "key": "lora_strength",
+      "label": "LoRA 强度",
+      "type": "float",
+      "default": 1.0,
+      "min": -10.0,
+      "max": 10.0,
+      "path": ["35", "inputs", "lora_2", "strength"]
+    },
+    {
+      "key": "seed",
+      "label": "种子（-1 表示每次随机）",
+      "type": "int",
+      "default": -1,
+      "path": ["39", "inputs", "seed"]
+    },
+    {
+      "key": "aspect_ratio",
+      "label": "宽高比",
+      "type": "enum",
+      "default": "9:16 (Portrait Widescreen)",
+      "choices": [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)"
+      ],
+      "path": ["38", "inputs", "aspect_ratio"]
+    }
+  ]
+}

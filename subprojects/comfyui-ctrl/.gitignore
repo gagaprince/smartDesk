@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+# 运行时生成的图片与接口文档
+workflows/outputs/
+workflows/backups/
+doc/
+*.log
