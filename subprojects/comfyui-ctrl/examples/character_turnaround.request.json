@@ -1,0 +1,10 @@
+{
+  "model": "qwen_lora_txt2img",
+  "prompt": "同一个动漫女性角色的正面、侧面、背面四视图定妆照, 纯白背景, 全身构图, 三视图人物比例与服装完全一致, 精致日系动漫插画风",
+  "n": 1,
+  "size": "2560x1440",
+  "aspect_ratio": "16:9",
+  "quality": "hd",
+  "task_type": "character_turnaround",
+  "reference_images": []
+}

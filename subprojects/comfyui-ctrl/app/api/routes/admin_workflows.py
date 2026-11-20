@@ -135,10 +135,13 @@ def reload_registry(
 @enum_router.get("/{source}", response_model=ApiResponse[EnumOptions])
 async def get_enum_options(
     source: str,
+    refresh: bool = False,
     service: WorkflowAdminService = Depends(get_workflow_admin_service),
 ) -> ApiResponse[EnumOptions]:
     try:
-        return ApiResponse(data=await service.enum_options(source))
+        return ApiResponse(
+            data=await service.enum_options(source, force_refresh=refresh)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:

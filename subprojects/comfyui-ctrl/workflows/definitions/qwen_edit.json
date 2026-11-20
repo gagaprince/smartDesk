@@ -1,0 +1,99 @@
+{
+  "workflow_id": "qwen_edit",
+  "name": "千问图像编辑",
+  "description": "",
+  "template": "qwen_edit.api.json",
+  "output_node": "461",
+  "params": [
+    {
+      "key": "seed",
+      "label": "种子",
+      "type": "int",
+      "required": false,
+      "default": 945470592046659,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": 0.0,
+      "max": 9007199254740991.0,
+      "path": [
+        "459:458",
+        "inputs",
+        "seed"
+      ],
+      "paths": null
+    },
+    {
+      "key": "switch_on_false",
+      "label": "提示词",
+      "type": "string",
+      "required": false,
+      "default": "图1和图2两个人物坐在客厅吃饭，交谈中，互相对视",
+      "choices": null,
+      "enum_source": null,
+      "multiline": true,
+      "min": null,
+      "max": null,
+      "path": [
+        "459:484",
+        "inputs",
+        "on_false"
+      ],
+      "paths": null
+    },
+    {
+      "key": "image_470",
+      "label": "图1",
+      "type": "image",
+      "required": false,
+      "default": "huaban-5076164465.jpg",
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "470",
+        "inputs",
+        "image"
+      ],
+      "paths": null
+    },
+    {
+      "key": "image_475",
+      "label": "图2",
+      "type": "image",
+      "required": false,
+      "default": "ComfyUI_temp_gzlfp_00005_.png",
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "475",
+        "inputs",
+        "image"
+      ],
+      "paths": null
+    },
+    {
+      "key": "steps",
+      "label": "steps",
+      "type": "int",
+      "required": false,
+      "default": 40,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": 1.0,
+      "max": 10000.0,
+      "path": [
+        "459:458",
+        "inputs",
+        "steps"
+      ],
+      "paths": null
+    }
+  ]
+}

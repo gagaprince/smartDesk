@@ -48,7 +48,7 @@
             <el-text
               type="info"
             >
-              实际输出到该目录下、与待裁切目录同名的子文件夹：{{ resultDir || '请先选择目录' }}
+              实际输出路径（输出目录 \ 当前日期 \ 与待裁切目录同名的子文件夹）：{{ resultDir || '请先选择目录' }}
             </el-text>
           </div>
         </el-form-item>
@@ -343,14 +343,15 @@ export default {
         };
     },
     computed: {
-        // 实际输出目录 = 配置的输出目录 + 待裁切图片目录的最后一级目录名
+        // 实际输出目录 = 配置的输出目录 + 当前日期 + 待裁切图片目录的最后一级目录名
         resultDir() {
             if (!this.form.outputDir) return '';
             const normalizedInput = (this.form.inputDir || '').replace(/[\\/]+$/, '');
             const segments = normalizedInput.split(/[\\/]/).filter(Boolean);
             const inputBase = segments.length ? segments[segments.length - 1] : '';
             const outputBase = this.form.outputDir.replace(/[\\/]+$/, '');
-            return inputBase ? `${outputBase}\\${inputBase}` : outputBase;
+            const dateBase = `${outputBase}\\${this.formatDate(new Date())}`;
+            return inputBase ? `${dateBase}\\${inputBase}` : dateBase;
         },
         allChecked() {
             return this.resultImages.length > 0
@@ -399,7 +400,7 @@ export default {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(this.form));
         },
         async selectFolder(key) {
-            const ret = await selectDirectory();
+            const ret = await selectDirectory(this.form[key]);
             if (ret && !ret.canceled && ret.filePaths && ret.filePaths[0]) {
                 this.form[key] = ret.filePaths[0];
                 this.saveForm();
@@ -536,6 +537,12 @@ export default {
             if (bytes < 1024) return `${bytes} B`;
             if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
             return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        },
+        formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         },
         hexToRgb(hex) {
             const matched = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');

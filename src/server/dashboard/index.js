@@ -697,8 +697,35 @@ export const openServiceHome = (id) => {
     return { success: false, message: '该服务没有浏览器入口' };
 };
 
+// Ollama 文档页: 主进程代理 /api/tags, 避免渲染层直连的跨域与系统代理问题
+export const getOllamaModels = async () => {
+    const meta = SERVICE_META.ollama;
+    if (!(await probeService(meta))) {
+        return { online: false, models: [] };
+    }
+    try {
+        const response = await axios.get('http://127.0.0.1:11434/api/tags', {
+            timeout: 3000,
+            proxy: false,
+        });
+        const models = (response.data && response.data.models) || [];
+        return {
+            online: true,
+            models: models.map((item) => ({
+                name: item.name,
+                sizeMiB: item.size ? Math.round(item.size / 1024 / 1024) : null,
+                modifiedAt: item.modified_at || null,
+                details: item.details || null,
+            })),
+        };
+    } catch (err) {
+        return { online: true, models: [], error: err.message };
+    }
+};
+
 registHandle(HandleEvents.GET_DASHBOARD_OVERVIEW, getOverview);
 registHandle(HandleEvents.START_SERVICE, startService);
 registHandle(HandleEvents.STOP_SERVICE, stopService);
 registHandle(HandleEvents.RELEASE_VRAM, releaseVram);
 registHandle(HandleEvents.OPEN_SERVICE_HOME, openServiceHome);
+registHandle(HandleEvents.GET_OLLAMA_MODELS, getOllamaModels);

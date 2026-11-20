@@ -388,6 +388,7 @@ import {
 } from '@/render/common/comfyuiApi';
 import {
     JOB_STATUS_META,
+    bumpWorkflowRegistry,
     buildDefaultValues,
     buildDraft,
     formatTime,
@@ -488,8 +489,10 @@ export default {
         },
         applyParseResult(result, template, existing = []) {
             const nextDrafts = {};
+            const parsedByPath = {};
             result.nodes.forEach((node) => {
                 node.inputs.forEach((input) => {
+                    parsedByPath[pathKey(input.path)] = input;
                     if (input.kind !== 'widget' || !input.suggest_export) return;
                     nextDrafts[pathKey(input.path)] = buildDraft(input);
                 });
@@ -498,8 +501,17 @@ export default {
                 const primaryPath = (
                     param.path || (param.paths && param.paths[0]) || []
                 ).map((segment) => String(segment));
+                const parsed = parsedByPath[pathKey(primaryPath)];
+                const migrated = { ...param };
+                // 旧版本把 LoadImage 文件名误判为 enum, 重新解析后自动迁移为 image
+                if (parsed && parsed.inferred_type === 'image') {
+                    migrated.type = 'image';
+                    migrated.choices = null;
+                    migrated.enum_source = null;
+                    migrated.multiline = false;
+                }
                 nextDrafts[pathKey(primaryPath)] = {
-                    ...param,
+                    ...migrated,
                     path: primaryPath,
                     paths: param.paths
                         ? param.paths.map((candidate) => candidate.map(
@@ -647,6 +659,7 @@ export default {
                 this.saveResult = result;
                 this.$message.success('保存成功，注册表已热加载');
                 await this.loadRegistry();
+                bumpWorkflowRegistry();
             } catch (err) {
                 this.$message.error(`保存失败：${err.message || err}`);
             }
@@ -656,6 +669,7 @@ export default {
                 await deleteWorkflowApi(entry.workflow_id);
                 this.$message.success(`已删除 ${entry.name}`);
                 await this.loadRegistry();
+                bumpWorkflowRegistry();
             } catch (err) {
                 this.$message.error(`删除失败：${err.message || err}`);
             }
@@ -667,6 +681,7 @@ export default {
                     `热加载完成：成功 ${result.loaded.length} 个，失败 ${Object.keys(result.failed).length} 个`,
                 );
                 await this.loadRegistry();
+                bumpWorkflowRegistry();
             } catch (err) {
                 this.$message.error(`热加载失败：${err.message || err}`);
             }

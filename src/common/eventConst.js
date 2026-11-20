@@ -29,6 +29,12 @@ export const HandleEvents = {
     STOP_SERVICE: 'stop_service',
     RELEASE_VRAM: 'release_vram',
     OPEN_SERVICE_HOME: 'open_service_home',
+    // Ollama 本地模型清单（文档页展示用, 主进程代理避免渲染层跨域限制）
+    GET_OLLAMA_MODELS: 'get_ollama_models',
+    // 局域网 HTTP 服务（Ollama 聊天测试页 + 显存清理接口）
+    GET_LAN_SERVER_STATUS: 'get_lan_server_status',
+    START_LAN_SERVER: 'start_lan_server',
+    STOP_LAN_SERVER: 'stop_lan_server',
 };
 
 export const RenderReceiveEvents = {

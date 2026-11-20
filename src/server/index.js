@@ -5,3 +5,4 @@ export * from './video/downloadVideo';
 export * from './headcut/index';
 export * from './comfyui/index';
 export * from './dashboard/index';
+export * from './lanserver/index';

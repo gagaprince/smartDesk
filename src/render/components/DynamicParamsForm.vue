@@ -17,23 +17,72 @@
         inactive-text="关"
         @update:model-value="(value) => emitChange(param.key, value)"
       />
-      <el-select
-        v-else-if="param.type === 'enum'"
-        :model-value="enumValue(param)"
-        :loading="!!enumLoading[param.enum_source]"
-        filterable
-        clearable
-        style="max-width: 480px"
-        placeholder="请选择"
-        @update:model-value="(value) => emitChange(param.key, value === '' ? null : value)"
+      <div
+        v-else-if="isLoraParam(param)"
+        class="lora-field"
       >
-        <el-option
-          v-for="item in enumOptions(param)"
-          :key="item"
-          :label="item"
-          :value="item"
+        <el-image
+          v-if="selectedLoraThumb(param.key)"
+          :src="selectedLoraThumb(param.key)"
+          fit="cover"
+          class="lora-field-thumb"
         />
-      </el-select>
+        <el-input
+          :model-value="stringValue(param.key)"
+          class="lora-field-input"
+          readonly
+          placeholder="点击右侧按钮选择 LoRA"
+        />
+        <el-button
+          :loading="loraLoading"
+          @click="openLoraPicker(param)"
+        >
+          选择 LoRA
+        </el-button>
+        <el-button
+          :loading="loraLoading"
+          title="重新拉取模型与缩略图"
+          @click="refreshLoraLibrary"
+        >
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+        <el-button
+          :disabled="!stringValue(param.key)"
+          @click="emitChange(param.key, null)"
+        >
+          清除
+        </el-button>
+      </div>
+      <div
+        v-else-if="param.type === 'enum'"
+        class="enum-field"
+      >
+        <el-select
+          :model-value="enumValue(param)"
+          :loading="!!enumLoading[param.enum_source]"
+          filterable
+          clearable
+          class="enum-select"
+          placeholder="请选择"
+          @update:model-value="(value) => emitChange(param.key, value === '' ? null : value)"
+        >
+          <el-option
+            v-for="item in enumOptions(param)"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+        <el-button
+          v-if="param.enum_source"
+          class="enum-refresh"
+          :loading="!!enumLoading[param.enum_source]"
+          title="重新拉取最新可选项（如新放入的 LoRA 模型）"
+          @click="refreshEnum(param)"
+        >
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+      </div>
       <el-input-number
         v-else-if="param.type === 'int' || param.type === 'float'"
         :model-value="numberValue(param.key)"
@@ -51,6 +100,53 @@
         show-word-limit
         @update:model-value="(value) => emitChange(param.key, value)"
       />
+      <div
+        v-else-if="param.type === 'image'"
+        class="image-param"
+      >
+        <el-upload
+          :ref="(el) => registerUploadRef(param.key, el)"
+          :show-file-list="false"
+          :auto-upload="false"
+          accept="image/*"
+          :on-change="(file) => handleImageChange(param.key, file)"
+        >
+          <el-button>
+            <el-icon><UploadFilled /></el-icon>
+            <span>选择图片</span>
+          </el-button>
+        </el-upload>
+        <div
+          v-if="hasImageValue(param.key)"
+          class="image-preview"
+        >
+          <el-image
+            v-if="isDataUrl(param.key)"
+            :src="stringValue(param.key)"
+            fit="contain"
+            :preview-src-list="[stringValue(param.key)]"
+            class="image-thumb"
+          />
+          <el-tag
+            v-else
+            size="small"
+            type="info"
+          >
+            {{ stringValue(param.key) }}
+          </el-tag>
+          <el-button
+            link
+            type="danger"
+            size="small"
+            @click="clearImage(param.key)"
+          >
+            清除
+          </el-button>
+        </div>
+        <div class="param-key-hint">
+          本地选图会自动转 base64 提交；接口也支持 data URL、纯 base64 或已上传文件名
+        </div>
+      </div>
       <el-input
         v-else
         :model-value="stringValue(param.key)"
@@ -68,13 +164,29 @@
   >
     该工作流没有配置外部参数，直接提交即可。
   </el-text>
+  <LoraPickerModal
+    v-if="loraLibrary"
+    v-model="loraPickerVisible"
+    :library="loraLibrary"
+    :selected="loraPickerValue"
+    :thumb-bust="thumbBust"
+    @select="handleLoraPick"
+  />
 </template>
 
 <script>
-import { fetchEnumOptions } from '@/render/common/comfyuiApi';
+import {
+    buildLoraThumbnailUrl,
+    fetchEnumOptions,
+    fetchLoraLibrary,
+} from '@/render/common/comfyuiApi';
+import LoraPickerModal from '@/render/components/lora/LoraPickerModal.vue';
+
+const LORA_ENUM_SOURCE = 'comfyui_loras';
 
 export default {
     name: 'DynamicParamsForm',
+    components: { LoraPickerModal },
     props: {
         params: {
             type: Array,
@@ -94,23 +206,87 @@ export default {
         return {
             enumCache: {},
             enumLoading: {},
+            uploadRefs: {},
+            loraLibrary: null,
+            loraLoading: false,
+            loraPickerVisible: false,
+            loraPickerKey: '',
+            thumbBust: 0,
         };
+    },
+    computed: {
+        loraPickerValue() {
+            const value = this.values[this.loraPickerKey];
+            return value === undefined || value === null ? '' : String(value);
+        },
     },
     watch: {
         params: {
             immediate: true,
             handler() {
                 this.loadEnumOptions();
+                this.ensureLoraLibrary();
             },
         },
     },
     methods: {
+        isLoraParam(param) {
+            return param.type === 'enum' && param.enum_source === LORA_ENUM_SOURCE;
+        },
+        async ensureLoraLibrary(force = false) {
+            const hasLoraParam = this.params.some((param) => this.isLoraParam(param));
+            if (!hasLoraParam || this.loraLoading || (this.loraLibrary && !force)) {
+                return;
+            }
+            this.loraLoading = true;
+            try {
+                this.loraLibrary = await fetchLoraLibrary(force);
+            } catch (err) {
+                this.$message.error(`LoRA 列表加载失败：${err.message || err}`);
+            } finally {
+                this.loraLoading = false;
+            }
+        },
+        async openLoraPicker(param) {
+            this.loraPickerKey = param.key;
+            if (!this.loraLibrary) {
+                await this.ensureLoraLibrary();
+            }
+            if (this.loraLibrary) {
+                this.loraPickerVisible = true;
+            }
+        },
+        async refreshLoraLibrary() {
+            await this.ensureLoraLibrary(true);
+            if (this.loraLibrary) {
+                this.thumbBust += 1;
+                this.$message.success(
+                    `LoRA 列表已刷新，共 ${this.loraLibrary.loras.length} 个模型`,
+                );
+            }
+        },
+        handleLoraPick(name) {
+            if (!this.loraPickerKey) {
+                return;
+            }
+            this.emitChange(this.loraPickerKey, name === '' ? null : name);
+        },
+        selectedLoraThumb(key) {
+            const value = this.values[key];
+            if (!value || !this.loraLibrary) {
+                return '';
+            }
+            const entry = this.loraLibrary.loras.find((lora) => lora.name === value);
+            return entry && entry.thumbnail_ready
+                ? buildLoraThumbnailUrl(value, this.thumbBust)
+                : '';
+        },
         async loadEnumOptions() {
             const sources = [...new Set(
                 this.params
                     .map((param) => param.enum_source)
                     .filter(Boolean),
-            )].filter(
+            )].filter((source) => source !== LORA_ENUM_SOURCE).filter(
                 (source) => !(source in this.enumCache) && !this.enumLoading[source],
             );
             if (!sources.length) return;
@@ -129,8 +305,53 @@ export default {
                 }
             }));
         },
+        async refreshEnum(param) {
+            const source = param.enum_source;
+            if (!source || this.enumLoading[source]) {
+                return;
+            }
+            this.enumLoading[source] = true;
+            try {
+                const result = await fetchEnumOptions(source, true);
+                this.enumCache[source] = result.options;
+                this.$message.success(`刷新成功，共 ${result.options.length} 个可选项`);
+            } catch (err) {
+                this.$message.error(`刷新失败：${err.message || err}`);
+            } finally {
+                this.enumLoading[source] = false;
+            }
+        },
         emitChange(key, value) {
             this.$emit('change', key, value);
+        },
+        handleImageChange(key, uploadFile) {
+            const file = uploadFile.raw;
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => this.emitChange(key, reader.result);
+            reader.onerror = () => this.$message.error('图片读取失败');
+            reader.readAsDataURL(file);
+            // 上传列表不展示, 读完即清空内部文件列表, 否则 limit/重复选择会被拦截
+            this.uploadRefs[key]?.clearFiles();
+        },
+        registerUploadRef(key, el) {
+            if (el) {
+                this.uploadRefs[key] = el;
+            } else {
+                delete this.uploadRefs[key];
+            }
+        },
+        clearImage(key) {
+            this.emitChange(key, null);
+            this.uploadRefs[key]?.clearFiles();
+        },
+        hasImageValue(key) {
+            const value = this.values[key];
+            return value !== undefined && value !== null
+                && String(value).trim() !== '';
+        },
+        isDataUrl(key) {
+            return String(this.values[key] || '').startsWith('data:');
         },
         boolValue(key) {
             return Boolean(this.values[key]);
@@ -162,5 +383,51 @@ export default {
   font-size: 12px;
   line-height: 1.4;
   color: #909399;
+}
+.image-param {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.enum-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.enum-select {
+  width: 100%;
+  max-width: 480px;
+}
+.enum-refresh {
+  flex-shrink: 0;
+}
+.lora-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.lora-field-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+}
+.lora-field-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 480px;
+}
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.image-thumb {
+  width: 120px;
+  height: 120px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
 }
 </style>

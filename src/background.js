@@ -5,6 +5,7 @@ import { createProtocol } from 'vue-cli-plugin-electron-builder/lib';
 import installExtension, { VUEJS3_DEVTOOLS } from 'electron-devtools-installer';
 import {
     initIpc, registHandle, startComfyuiService, stopComfyuiService,
+    startLanServer, stopLanServer,
 } from '@/server/index';
 import { HandleEvents } from '@/common/eventConst';
 
@@ -60,6 +61,7 @@ app.on('window-all-closed', () => {
     // to stay active until the user quits explicitly with Cmd + Q
     if (process.platform !== 'darwin') {
         stopComfyuiService();
+        stopLanServer();
         app.quit();
     }
 });
@@ -85,10 +87,13 @@ app.on('ready', async () => {
     startComfyuiService()
         .then((status) => console.log('comfyui-ctrl 服务状态:', status))
         .catch((err) => console.error('comfyui-ctrl 启动失败:', err));
+    // 局域网 Ollama 测试页与显存清理接口, 不阻塞窗口创建
+    startLanServer();
 });
 
 app.on('before-quit', () => {
     stopComfyuiService();
+    stopLanServer();
 });
 
 // Exit cleanly on request from parent process in development mode.

@@ -8,9 +8,12 @@ workflows/templates; parameter mapping lives in workflows/definitions.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import copy
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -33,6 +36,23 @@ MAX_JOBS = 50
 JOB_POLL_SECONDS = 2.0
 JOB_TIMEOUT_SECONDS = 600.0
 LORA_CACHE_SECONDS = 300.0
+# 调用方上传的图片统一放到 ComfyUI input 下的该子目录, 便于与手工素材区分
+UPLOAD_IMAGE_SUBFOLDER = "smartdesk"
+DATA_URL_PATTERN = re.compile(
+    r"^data:(?P<mime>[\w.+-]+/[\w.+-]+);base64,(?P<data>.+)$", re.DOTALL
+)
+BASE64_PATTERN = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+IMAGE_SIGNATURES = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"BM", b"RIFF")
+# 短于该长度的纯字母字符串按文件名处理, 避免与无扩展名文件名冲突
+MIN_BASE64_IMAGE_LENGTH = 64
+MIME_SUFFIXES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+}
 
 
 class WorkflowInvokeError(Exception):
@@ -183,9 +203,13 @@ class WorkflowService:
             raise KeyError(workflow_id)
         return definition
 
-    async def list_loras(self) -> list[str]:
+    async def list_loras(self, force_refresh: bool = False) -> list[str]:
         now = time.time()
-        if self._lora_cache and now - self._lora_cache[0] < LORA_CACHE_SECONDS:
+        if (
+            not force_refresh
+            and self._lora_cache
+            and now - self._lora_cache[0] < LORA_CACHE_SECONDS
+        ):
             return self._lora_cache[1]
         async with self._client() as client:
             resp = await client.get("/object_info/LoraLoader")
@@ -221,37 +245,44 @@ class WorkflowService:
     ) -> JobInfo:
         submitted: dict[str, Any] = {}
         available_loras: list[str] | None = None
-
-        for param in definition.params:
-            if param.key in raw_params:
-                value = self._coerce(param, raw_params[param.key])
-            elif param.default is not None:
-                value = param.default
-            elif param.required:
-                raise ValueError(f"缺少必填参数：{param.label}")
-            else:
-                continue
-
-            if param.type == "enum":
-                choices = param.choices
-                if param.enum_source == "comfyui_loras":
-                    if available_loras is None:
-                        available_loras = await self.list_loras()
-                    choices = available_loras
-                if choices is not None and value not in choices:
-                    raise ValueError(f"参数 {param.label} 的取值不合法：{value}")
-
-            submitted[param.key] = value
-            paths = param.paths or ([param.path] if param.path else [])
-            for path in paths:
-                self._inject(graph, path, value)
-
         client_id = str(uuid.uuid4())
+        uploaded_refs: list[dict[str, str]] = []
         async with self._client() as client:
+            for param in definition.params:
+                if param.key in raw_params:
+                    raw_value = raw_params[param.key]
+                elif param.default is not None:
+                    raw_value = param.default
+                elif param.required:
+                    raise ValueError(f"缺少必填参数：{param.label}")
+                else:
+                    continue
+
+                if param.type == "image":
+                    value = await self._materialize_image(
+                        client, raw_value, param.label, uploaded_refs
+                    )
+                else:
+                    value = self._coerce(param, raw_value)
+                    if param.type == "enum":
+                        choices = param.choices
+                        if param.enum_source == "comfyui_loras":
+                            if available_loras is None:
+                                available_loras = await self.list_loras()
+                            choices = available_loras
+                        if choices is not None and value not in choices:
+                            raise ValueError(f"参数 {param.label} 的取值不合法：{value}")
+
+                submitted[param.key] = value
+                paths = param.paths or ([param.path] if param.path else [])
+                for path in paths:
+                    self._inject(graph, path, value)
+
             resp = await client.post(
                 "/prompt", json={"prompt": graph, "client_id": client_id}
             )
             if resp.status_code != 200:
+                self._cleanup_refs(uploaded_refs)
                 raise WorkflowInvokeError(resp.json())
             submit_payload = resp.json()
             prompt_id = submit_payload["prompt_id"]
@@ -269,6 +300,7 @@ class WorkflowService:
             "node_errors": submit_node_errors,
             "created_at": datetime.now(),
             "finished_at": None,
+            "uploaded_images": uploaded_refs,
         }
         self._jobs[prompt_id] = job
         self._prune_jobs()
@@ -312,9 +344,123 @@ class WorkflowService:
         cursor[str(path[-1])] = value
 
     # ------------------------------------------------------------------
+    # Image params: data URL / base64 -> ComfyUI upload -> widget filename
+    # ------------------------------------------------------------------
+    async def _materialize_image(
+        self,
+        client: httpx.AsyncClient,
+        raw: Any,
+        label: str,
+        uploaded_refs: list[dict[str, str]],
+    ) -> str:
+        """Turn an image param value into a LoadImage-ready filename.
+
+        Data URLs and raw base64 are uploaded to ComfyUI first; plain
+        filenames pass through unchanged for backward compatibility.
+        """
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValueError(f"参数 {label} 需要图片值（data URL、base64 或文件名）")
+        value = raw.strip()
+        decoded, mime = self._decode_image_value(value, label)
+        if decoded is None:
+            return value
+        ref = await self._upload_image(client, decoded, mime)
+        uploaded_refs.append(ref)
+        return f"{ref['subfolder']}/{ref['name']}" if ref.get("subfolder") else ref["name"]
+
+    @staticmethod
+    def _decode_image_value(value: str, label: str) -> tuple[bytes | None, str]:
+        if value.startswith("data:"):
+            match = DATA_URL_PATTERN.match(value)
+            if not match:
+                raise ValueError(
+                    f"参数 {label} 的 Data URL 格式不正确，应为 data:image/png;base64,..."
+                )
+            try:
+                raw = base64.b64decode(match.group("data"), validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(f"参数 {label} 的图片 base64 解码失败") from exc
+            return raw, match.group("mime")
+        compact = "".join(value.split())
+        # 文件名一般含扩展名、路径分隔符等 base64 字母表之外的字符;
+        # 注意 base64 自身也可能含 "/", 不能用路径符判断
+        is_base64_like = (
+            len(compact) >= MIN_BASE64_IMAGE_LENGTH
+            and not compact.endswith(("[input]", "[output]", "[temp]"))
+            and BASE64_PATTERN.fullmatch(compact) is not None
+        )
+        if not is_base64_like:
+            return None, ""
+        try:
+            raw = base64.b64decode(compact, validate=True)
+        except (binascii.Error, ValueError):
+            return None, ""
+        if not raw.startswith(IMAGE_SIGNATURES):
+            raise ValueError(
+                f"参数 {label} 既不是合法图片 base64，也不是已存在的文件名；"
+                "推荐使用 data:image/png;base64,... 形式传参"
+            )
+        return raw, "image/png"
+
+    async def _upload_image(
+        self, client: httpx.AsyncClient, raw: bytes, mime: str
+    ) -> dict[str, str]:
+        suffix = MIME_SUFFIXES.get(mime, ".png")
+        filename = f"{uuid.uuid4().hex}{suffix}"
+        files = {"image": (filename, raw, mime or "application/octet-stream")}
+        data = {
+            "subfolder": UPLOAD_IMAGE_SUBFOLDER,
+            "type": "input",
+            "overwrite": "false",
+        }
+        try:
+            resp = await client.post("/upload/image", data=data, files=files)
+            resp.raise_for_status()
+            payload = resp.json()
+        except httpx.HTTPError as exc:
+            raise ValueError(f"图片上传到 ComfyUI 失败：{exc}") from exc
+        return {
+            "name": str(payload["name"]),
+            "subfolder": str(payload.get("subfolder") or ""),
+            "type": str(payload.get("type") or "input"),
+        }
+
+    def _cleanup_uploaded(self, job_id: str) -> None:
+        """Best-effort removal of caller uploads once the job reached a terminal state."""
+        job = self._jobs.get(job_id)
+        refs = job.get("uploaded_images") if job else None
+        if refs:
+            self._cleanup_refs(refs)
+
+    def _cleanup_refs(self, refs: list[dict[str, str]]) -> None:
+        """Delete uploaded files from the configured input dir (no-op when unconfigured)."""
+        if not refs or not self._settings.comfyui_input_dir:
+            return
+        input_dir = Path(self._settings.comfyui_input_dir)
+        if not input_dir.is_dir():
+            return
+        input_root = input_dir.resolve()
+        for ref in refs:
+            target = (input_dir / ref.get("subfolder", "") / ref["name"]).resolve()
+            if input_root not in target.parents or not target.is_file():
+                continue
+            try:
+                target.unlink()
+            except OSError:
+                logger.warning("上传图片清理失败: %s", target)
+
+    # ------------------------------------------------------------------
     # Job tracking
     # ------------------------------------------------------------------
     async def _watch_job(self, definition: WorkflowDef, job_id: str) -> None:
+        try:
+            await self._watch_job_until_done(definition, job_id)
+        finally:
+            self._cleanup_uploaded(job_id)
+
+    async def _watch_job_until_done(
+        self, definition: WorkflowDef, job_id: str
+    ) -> None:
         deadline = time.time() + JOB_TIMEOUT_SECONDS
         async with self._client() as client:
             while time.time() < deadline:

@@ -130,7 +130,19 @@
                 :preview-src-list="[resolveImageUrl(currentJob.image_url)]"
                 fit="contain"
                 class="result-image"
+                @show="handlePreviewShow"
+                @close="handlePreviewClose"
               />
+              <div class="result-actions">
+                <el-button
+                  type="primary"
+                  :loading="downloading"
+                  @click="handleDownloadImage"
+                >
+                  <el-icon><Download /></el-icon>
+                  <span>下载图片</span>
+                </el-button>
+              </div>
             </div>
           </div>
         </el-card>
@@ -160,6 +172,8 @@
               :preview-src-list="[resolveImageUrl(row.image_url)]"
               fit="cover"
               class="job-thumb"
+              @show="handlePreviewShow"
+              @close="handlePreviewClose"
             />
             <el-text
               v-else
@@ -233,6 +247,7 @@ import {
 } from '@/render/common/comfyuiApi';
 import {
     JOB_STATUS_META,
+    workflowRegistryState,
     buildDefaultValues,
     formatTime,
 } from '@/render/common/workflowUtil';
@@ -244,6 +259,7 @@ export default {
     components: { DynamicParamsForm },
     data() {
         return {
+            workflowRegistryState,
             Promotion,
             workflows: [],
             selectedId: '',
@@ -253,6 +269,9 @@ export default {
             currentJob: null,
             jobs: [],
             pollTimer: null,
+            lastMetaFetchAt: 0,
+            downloading: false,
+            previewCleanup: null,
         };
     },
     computed: {
@@ -266,6 +285,12 @@ export default {
                 && ['queued', 'running'].includes(this.currentJob.status);
         },
     },
+    watch: {
+        // 管理页保存/删除/热加载后静默刷新定义, 不打断当前填写与轮询
+        'workflowRegistryState.version': function onRegistryChange() {
+            this.refreshWorkflows().catch(() => {});
+        },
+    },
     mounted() {
         this.loadMeta();
     },
@@ -273,6 +298,10 @@ export default {
         // keep-alive 重新激活时, 若任务仍在生成则恢复轮询
         if (this.busy && !this.pollTimer) {
             this.startPolling(this.currentJob.job_id);
+        }
+        // 覆盖服务重启或定义文件被外部修改等未走管理页信号的场景
+        if (Date.now() - this.lastMetaFetchAt > 10000) {
+            this.refreshWorkflows().catch(() => {});
         }
     },
     deactivated() {
@@ -326,19 +355,37 @@ export default {
         async loadMeta() {
             this.loadingMeta = true;
             try {
-                const workflowList = await fetchWorkflows();
-                this.workflows = workflowList;
-                const first = workflowList[0];
-                if (first) {
-                    this.selectedId = first.workflow_id;
-                    this.paramValues = buildDefaultValues(first.params);
-                }
+                await this.refreshWorkflows();
                 await this.refreshJobs();
             } catch (err) {
                 this.$message.error(`加载工作流失败：${err.message || err}`);
             } finally {
                 this.loadingMeta = false;
             }
+        },
+        async refreshWorkflows() {
+            // 静默刷新定义: 保留当前选中工作流, 已填写/已清除的参数值原样保留,
+            // 仅对新增参数补默认值、对已删除参数自然丢弃
+            const workflowList = await fetchWorkflows();
+            this.lastMetaFetchAt = Date.now();
+            this.workflows = workflowList;
+            const target = workflowList.find(
+                (item) => item.workflow_id === this.selectedId,
+            ) || workflowList[0];
+            if (!target) {
+                this.selectedId = '';
+                this.paramValues = {};
+                return;
+            }
+            this.selectedId = target.workflow_id;
+            const defaults = buildDefaultValues(target.params);
+            const merged = { ...defaults };
+            target.params.forEach((param) => {
+                if (Object.prototype.hasOwnProperty.call(this.paramValues, param.key)) {
+                    merged[param.key] = this.paramValues[param.key];
+                }
+            });
+            this.paramValues = merged;
         },
         handleSwitchWorkflow(workflowId) {
             const target = this.workflows.find(
@@ -370,6 +417,83 @@ export default {
         },
         handleParamChange(key, value) {
             this.paramValues = { ...this.paramValues, [key]: value };
+        },
+        async handleDownloadImage() {
+            if (!this.currentJob || !this.currentJob.image_url || this.downloading) {
+                return;
+            }
+            this.downloading = true;
+            try {
+                const response = await fetch(resolveImageUrl(this.currentJob.image_url));
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const blob = await response.blob();
+                const ext = this.imageExtFromMime(blob.type);
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = `${this.currentJob.workflow_id}_${this.currentJob.job_id.slice(0, 8)}.${ext}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(objectUrl);
+                this.$message.success('图片已开始下载');
+            } catch (err) {
+                this.$message.error(`下载失败：${err.message || err}`);
+            } finally {
+                this.downloading = false;
+            }
+        },
+        imageExtFromMime(mime) {
+            const mapping = {
+                'image/png': 'png',
+                'image/jpeg': 'jpg',
+                'image/webp': 'webp',
+                'image/gif': 'gif',
+                'image/bmp': 'bmp',
+            };
+            return mapping[mime] || 'png';
+        },
+        handlePreviewShow() {
+            this.$nextTick(() => {
+                const viewer = this.$el.querySelector('.el-image-viewer__wrapper')
+                    || document.querySelector('.el-image-viewer__wrapper');
+                if (!viewer) {
+                    return;
+                }
+                let pressX = 0;
+                let pressY = 0;
+                const recordPress = (event) => {
+                    if (event.button === 0) {
+                        pressX = event.clientX;
+                        pressY = event.clientY;
+                    }
+                };
+                const closeOnTap = (event) => {
+                    if (event.button !== 0
+                        || event.target.closest('.el-image-viewer__btn')
+                        || Math.hypot(event.clientX - pressX, event.clientY - pressY) > 5) {
+                        return;
+                    }
+                    const closeBtn = viewer.querySelector('.el-image-viewer__close');
+                    if (closeBtn) {
+                        closeBtn.click();
+                    }
+                };
+                viewer.addEventListener('pointerdown', recordPress);
+                viewer.addEventListener('pointerup', closeOnTap);
+                this.previewCleanup = () => {
+                    viewer.removeEventListener('pointerdown', recordPress);
+                    viewer.removeEventListener('pointerup', closeOnTap);
+                    this.previewCleanup = null;
+                };
+            });
+        },
+        handlePreviewClose() {
+            if (this.previewCleanup) {
+                this.previewCleanup();
+            }
         },
         async handleGenerate() {
             if (!this.workflow) {
@@ -447,12 +571,24 @@ export default {
 }
 .result-image-wrapper {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.result-actions {
+  display: flex;
   justify-content: center;
 }
 .result-image {
   max-width: 100%;
-  max-height: 560px;
   border-radius: 8px;
+}
+.result-image :deep(.el-image__inner) {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
 }
 .job-thumb {
   width: 72px;

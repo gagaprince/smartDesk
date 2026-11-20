@@ -5,8 +5,12 @@ import Dashboard from '@/render/views/Dashboard.vue';
 import Setting from '@/render/views/Setting.vue';
 import BatchVideoDownload from '@/render/views/BatchVideoDownload.vue';
 import HeadCut from '@/render/views/HeadCut.vue';
+import LoraLibrary from '@/render/views/LoraLibrary.vue';
 import WorkflowAdminPage from '@/render/views/WorkflowAdminPage.vue';
 import WorkflowPage from '@/render/views/WorkflowPage.vue';
+import WorkflowApiDoc from '@/render/views/WorkflowApiDoc.vue';
+import OllamaGuide from '@/render/views/OllamaGuide.vue';
+import OllamaChat from '@/render/views/OllamaChat.vue';
 
 const routes = [
     {
@@ -31,6 +35,11 @@ const routes = [
                 component: HeadCut,
             },
             {
+                path: 'prod/lora-library',
+                name: 'lora-library',
+                component: LoraLibrary,
+            },
+            {
                 path: 'prod/workflow-admin',
                 name: 'workflow-admin',
                 component: WorkflowAdminPage,
@@ -39,6 +48,21 @@ const routes = [
                 path: 'prod/workflow',
                 name: 'workflow',
                 component: WorkflowPage,
+            },
+            {
+                path: 'prod/api-doc',
+                name: 'api-doc',
+                component: WorkflowApiDoc,
+            },
+            {
+                path: 'prod/ollama-guide',
+                name: 'ollama-guide',
+                component: OllamaGuide,
+            },
+            {
+                path: 'prod/ollama-chat',
+                name: 'ollama-chat',
+                component: OllamaChat,
             },
             {
                 path: 'setting',

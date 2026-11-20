@@ -63,7 +63,7 @@ export const invokeTest = async () => {
 export const openDevTool = async () => ipcRenderer.invoke(HandleEvents.OPEN_DEV_TOOLS);
 
 // 目录选择与打开
-export const selectDirectory = async () => ipcRenderer.invoke(HandleEvents.SELECT_DIR);
+export const selectDirectory = async (defaultPath) => ipcRenderer.invoke(HandleEvents.SELECT_DIR, defaultPath);
 export const openDirectory = async (dir) => ipcRenderer.invoke(HandleEvents.OPEN_DIR, dir);
 
 // 短视频下载目录配置（配置入口在短视频下载功能页内）
@@ -106,3 +106,11 @@ export const openDashboardServiceHome = async (id) => ipcRenderer.invoke(
     HandleEvents.OPEN_SERVICE_HOME,
     id,
 );
+
+// Ollama 调用说明页: 获取本地模型清单与在线状态
+export const getOllamaModels = async () => ipcRenderer.invoke(HandleEvents.GET_OLLAMA_MODELS);
+
+// 局域网 HTTP 服务: 状态查询与启停
+export const getLanServerStatus = async () => ipcRenderer.invoke(HandleEvents.GET_LAN_SERVER_STATUS);
+export const startLanServerApi = async () => ipcRenderer.invoke(HandleEvents.START_LAN_SERVER);
+export const stopLanServerApi = async () => ipcRenderer.invoke(HandleEvents.STOP_LAN_SERVER);

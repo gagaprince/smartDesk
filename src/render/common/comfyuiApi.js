@@ -103,4 +103,40 @@ export const reloadRegistry = () => request('/admin/workflows/reload', {
     method: 'POST',
 });
 
-export const fetchEnumOptions = (source) => request(`/admin/enums/${source}`);
+export const fetchEnumOptions = (source, forceRefresh = false) => request(
+    `/admin/enums/${source}${forceRefresh ? '?refresh=true' : ''}`,
+);
+
+// ----- LoRA 模型管理 -----
+
+export const fetchLoraLibrary = (forceRefresh = false) => request(
+    `/admin/lora-library${forceRefresh ? '?refresh=true' : ''}`,
+);
+
+export const saveLoraDimensions = (dimensions) => request(
+    '/admin/lora-library/dimensions',
+    { method: 'PUT', body: JSON.stringify({ dimensions }) },
+);
+
+export const batchLoraTags = (names, tags) => request(
+    '/admin/lora-library/tags/batch',
+    { method: 'PUT', body: JSON.stringify({ names, tags }) },
+);
+
+export const saveLoraThumbnail = (name, imageDataUrl) => request(
+    '/admin/lora-library/thumbnail',
+    {
+        method: 'POST',
+        body: JSON.stringify({ name, image_data: imageDataUrl }),
+    },
+);
+
+export const deleteLoras = (names) => request(
+    '/admin/lora-library/delete',
+    { method: 'POST', body: JSON.stringify({ names }) },
+);
+
+// 缩略图与模型同目录同名, 保存后用 bust 参数强制刷新缓存
+export const buildLoraThumbnailUrl = (name, bust = 0) => (
+    `${baseUrl}${API_PREFIX}/admin/lora-library/thumbnail?name=${encodeURIComponent(name)}&t=${bust}`
+);

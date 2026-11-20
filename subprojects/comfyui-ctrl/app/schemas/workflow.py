@@ -11,7 +11,7 @@ class ParamDef(BaseModel):
 
     key: str
     label: str
-    type: Literal["string", "int", "float", "bool", "enum"]
+    type: Literal["string", "int", "float", "bool", "enum", "image"]
     required: bool = False
     default: Any | None = None
     choices: list[str] | None = None

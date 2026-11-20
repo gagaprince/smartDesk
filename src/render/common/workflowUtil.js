@@ -1,4 +1,13 @@
 // ComfyUI 工作流相关页面的共享工具: 默认值、状态元信息、草稿绑定辅助
+import { reactive } from 'vue';
+
+// 工作流注册表变更信号: 管理页保存/删除/热加载后递增,
+// 被 keep-alive 缓存的生书页与文档页据此静默刷新定义
+export const workflowRegistryState = reactive({ version: 0 });
+
+export const bumpWorkflowRegistry = () => {
+    workflowRegistryState.version += 1;
+};
 
 // 任务状态 -> Element Plus 标签类型与中文文案
 export const JOB_STATUS_META = {
@@ -41,6 +50,7 @@ export const TYPE_OPTIONS = [
     { value: 'float', label: '小数 float' },
     { value: 'bool', label: '布尔 bool' },
     { value: 'enum', label: '枚举 enum' },
+    { value: 'image', label: '图片 image（上传/Base64）' },
 ];
 
 // 草稿以路径拼出来的字符串作为 key

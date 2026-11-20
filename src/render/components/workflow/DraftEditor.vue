@@ -129,6 +129,21 @@
         />
       </span>
     </div>
+    <div
+      v-if="draft.type === 'image'"
+      class="draft-row"
+    >
+      <el-input
+        :model-value="stringDefault"
+        style="max-width: 600px"
+        placeholder="默认文件名（ComfyUI input 目录，留空则该图片参数必填）"
+        @update:model-value="(val) => emitChange({ default: val || null })"
+      >
+        <template #prepend>
+          默认文件名
+        </template>
+      </el-input>
+    </div>
   </div>
 </template>
 

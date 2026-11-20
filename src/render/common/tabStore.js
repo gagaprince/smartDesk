@@ -42,6 +42,30 @@ export const menuConfig = [
                 icon: 'PictureFilled',
                 closable: true,
             },
+            {
+                path: '/prod/lora-library',
+                title: 'LoRA 模型管理',
+                icon: 'CollectionTag',
+                closable: true,
+            },
+            {
+                path: '/prod/api-doc',
+                title: '调用文档',
+                icon: 'Document',
+                closable: true,
+            },
+            {
+                path: '/prod/ollama-guide',
+                title: 'ollama调用说明',
+                icon: 'ChatDotRound',
+                closable: true,
+            },
+            {
+                path: '/prod/ollama-chat',
+                title: 'ollama测试',
+                icon: 'ChatLineRound',
+                closable: true,
+            },
         ],
     },
     {

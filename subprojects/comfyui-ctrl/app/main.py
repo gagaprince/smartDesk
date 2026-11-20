@@ -6,7 +6,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import admin_workflows, health, workflows
+from app.api.routes import (
+    admin_workflows,
+    compat,
+    health,
+    lora_library,
+    vram,
+    workflows,
+)
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -48,3 +55,6 @@ app.include_router(health.router)
 app.include_router(workflows.router, prefix="/api/v1")
 app.include_router(admin_workflows.router, prefix="/api/v1")
 app.include_router(admin_workflows.enum_router, prefix="/api/v1")
+app.include_router(lora_library.router, prefix="/api/v1")
+app.include_router(compat.router)
+app.include_router(vram.router, prefix="/api/v1")

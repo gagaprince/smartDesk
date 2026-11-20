@@ -26,6 +26,23 @@
         :value="item"
       />
     </el-select>
+    <div
+      v-else-if="input.inferred_type === 'image'"
+      class="fixed-image"
+    >
+      <el-input
+        :model-value="stringValue"
+        style="max-width: 420px"
+        placeholder="ComfyUI input 目录中的图片文件名"
+        @update:model-value="(val) => $emit('change', val)"
+      />
+      <el-text
+        type="info"
+        size="small"
+      >
+        固定值只能填写文件名；勾选「导出为参数」后，调用方可直接上传图片
+      </el-text>
+    </div>
     <el-input
       v-else-if="input.multiline"
       :model-value="stringValue"
@@ -75,3 +92,12 @@ export default {
     },
 };
 </script>
+
+<style scoped>
+.fixed-image {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+</style>

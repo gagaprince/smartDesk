@@ -7,9 +7,11 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { app } = require('electron');
 
-const HOST = '127.0.0.1';
+// uvicorn 绑定 0.0.0.0 以承载 AIComicBuilder 兼容协议的局域网访问
+const BIND_HOST = '0.0.0.0';
 const PORT = 8888;
-export const COMFYUI_CTRL_BASE = `http://${HOST}:${PORT}`;
+// 渲染层与健康探测始终走回环地址
+export const COMFYUI_CTRL_BASE = `http://127.0.0.1:${PORT}`;
 const HEALTH_URL = `${COMFYUI_CTRL_BASE}/health`;
 
 let serviceChild = null;
@@ -86,7 +88,7 @@ export const startComfyuiService = async () => {
         }
         const child = spawn(
             python,
-            ['-m', 'uvicorn', 'app.main:app', '--host', HOST, '--port', String(PORT)],
+            ['-m', 'uvicorn', 'app.main:app', '--host', BIND_HOST, '--port', String(PORT)],
             {
                 cwd: home,
                 windowsHide: true,

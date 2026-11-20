@@ -22,7 +22,7 @@ class ParsedInput(BaseModel):
     path: list[str]
     current_value: Any | None
     kind: Literal["widget", "link", "wrapper"]
-    inferred_type: Literal["string", "int", "float", "bool", "enum", "unknown"]
+    inferred_type: Literal["string", "int", "float", "bool", "enum", "image", "unknown"]
     choices: list[str] | None = None
     enum_source: str | None = None
     multiline: bool = False

@@ -208,7 +208,7 @@ export default {
             this.downloadPath = await getVideoWorkspace();
         },
         async selectDownloadDir() {
-            const ret = await selectDirectory();
+            const ret = await selectDirectory(this.downloadPath);
             if (ret && !ret.canceled && ret.filePaths && ret.filePaths[0]) {
                 this.downloadPath = ret.filePaths[0];
                 await setVideoWorkspace(this.downloadPath);

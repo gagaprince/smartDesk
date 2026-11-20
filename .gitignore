@@ -42,4 +42,6 @@ subprojects/headcut/headcut/models/rembg/
 subprojects/comfyui-ctrl/.env
 subprojects/comfyui-ctrl/workflows/outputs/
 subprojects/comfyui-ctrl/workflows/backups/
+# LoRA 标签/维度等运行时数据, 仅保留在本地
+subprojects/comfyui-ctrl/workflows/lora_library.json
 subprojects/comfyui-ctrl/doc/

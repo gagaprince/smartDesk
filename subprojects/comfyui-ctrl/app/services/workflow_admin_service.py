@@ -49,6 +49,9 @@ TEXT_NODES = {"CLIPTextEncode", "TextGenerate", "easy positive", "easy negative"
 LORA_LOADER_CLASSES = {"LoraLoader", "LoraLoaderModelOnly"}
 SAMPLER_CLASSES = {"KSampler", "KSamplerAdvanced"}
 SWITCH_NODE_CLASS = "ComfySwitchNode"
+# ComfyUI 图片加载节点: widget 值是 input 目录文件名, 平台改造成 image 类型,
+# 调用方上传图片后由服务端换成实际文件名再注入
+IMAGE_LOADER_CLASSES = {"LoadImage", "LoadImageMask"}
 
 ENUM_SOURCE_SPECS: dict[str, tuple[str, str]] = {
     "checkpoints": ("CheckpointLoaderSimple", "ckpt_name"),
@@ -71,9 +74,13 @@ class WorkflowAdminService:
     # ------------------------------------------------------------------
     # ComfyUI metadata
     # ------------------------------------------------------------------
-    async def _object_info(self) -> dict[str, Any]:
+    async def _object_info(self, force_refresh: bool = False) -> dict[str, Any]:
         now = time.time()
-        if self._object_info_cache and now - self._object_info_cache[0] < OBJECT_INFO_CACHE_SECONDS:
+        if (
+            not force_refresh
+            and self._object_info_cache
+            and now - self._object_info_cache[0] < OBJECT_INFO_CACHE_SECONDS
+        ):
             return self._object_info_cache[1]
         try:
             async with self._client() as client:
@@ -86,13 +93,18 @@ class WorkflowAdminService:
         self._object_info_cache = (now, info)
         return info
 
-    async def enum_options(self, source: str) -> EnumOptions:
+    async def enum_options(
+        self, source: str, force_refresh: bool = False
+    ) -> EnumOptions:
         if source == "comfyui_loras":
-            return EnumOptions(source=source, options=await self._workflows.list_loras())
+            return EnumOptions(
+                source=source,
+                options=await self._workflows.list_loras(force_refresh=force_refresh),
+            )
         spec = ENUM_SOURCE_SPECS.get(source)
         if spec is None:
             raise ValueError(f"不支持的枚举来源：{source}")
-        info = await self._object_info()
+        info = await self._object_info(force_refresh=force_refresh)
         class_type, input_name = spec
         node_meta = info.get(class_type, {}).get("input", {})
         raw = node_meta.get("required", {}).get(input_name) or node_meta.get("optional", {}).get(input_name)
@@ -236,7 +248,13 @@ class WorkflowAdminService:
                     current_value=value, kind="wrapper", inferred_type="unknown",
                 )
             ]
-        inferred = self._infer_scalar(value, spec)
+        if self._is_image_input(class_type, input_name, value, spec):
+            inferred = {
+                "inferred_type": "image", "choices": None, "enum_source": None,
+                "multiline": False, "min": None, "max": None,
+            }
+        else:
+            inferred = self._infer_scalar(value, spec)
         item = ParsedInput(
             node_id=node_id, node_title=node_title, class_type=class_type,
             input_name=input_name, path=base_path + [input_name],
@@ -244,6 +262,19 @@ class WorkflowAdminService:
         )
         self._apply_suggestion(item, used_keys)
         return [item]
+
+    @staticmethod
+    def _is_image_input(
+        class_type: str, input_name: str, value: Any, spec: list[Any] | None
+    ) -> bool:
+        """LoadImage 一类节点的文件名控件, object_info 中带 image_upload 标记。"""
+        if not isinstance(value, str):
+            return False
+        if spec and isinstance(spec[0], list):
+            opts = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            if opts.get("image_upload"):
+                return True
+        return class_type in IMAGE_LOADER_CLASSES and input_name == "image"
 
     def _parse_rgthree_slot(
         self,
@@ -367,6 +398,12 @@ class WorkflowAdminService:
         elif item.class_type in LORA_LOADER_CLASSES and name.startswith("strength"):
             item.suggest_export = False
             item.inferred_type = "float"
+        elif item.inferred_type == "image":
+            item.suggest_export = True
+            item.suggest_key = self._unique_key(f"image_{item.node_id}", used_keys)
+            item.suggest_label = f"图片（{item.node_title or item.node_id}）"
+            item.choices = None
+            item.enum_source = None
 
     @staticmethod
     def _unique_key(candidate: str, used_keys: set[str]) -> str:
@@ -497,6 +534,23 @@ class WorkflowAdminService:
                 f"{'是' if param.required else '否'} | "
                 f"{self._format_default(param.default)} | {value_domain} |"
             )
+        image_params = [param for param in definition.params if param.type == "image"]
+        if image_params:
+            lines.extend(
+                [
+                    "",
+                    "### 图片参数说明",
+                    "",
+                    "图片类型参数支持以下三种传值方式：",
+                    "",
+                    "1. Data URL：`data:image/png;base64,...`（推荐，可直接放在 JSON 中提交）",
+                    "2. 纯 base64 字符串（不带 `data:` 前缀，服务端按 PNG 解码）",
+                    "3. ComfyUI input 目录中已存在的文件名（兼容旧调用方式）",
+                    "",
+                    "服务端收到前两种值后会自动上传到 ComfyUI 并替换为文件名注入工作流，",
+                    "调用方不需要知道 ComfyUI 的本地目录结构。",
+                ]
+            )
         lines.extend(
             [
                 "",
@@ -526,6 +580,8 @@ class WorkflowAdminService:
 
     @staticmethod
     def _param_value_domain(param: Any) -> str:
+        if param.type == "image":
+            return "图片：data URL / base64 / 已上传文件名"
         if param.enum_source:
             return f"动态枚举：{param.enum_source}"
         if param.choices:
@@ -544,11 +600,13 @@ class WorkflowAdminService:
 
     @staticmethod
     def _example_params(definition: WorkflowDef) -> dict[str, Any]:
-        return {
-            param.key: param.default
-            for param in definition.params
-            if param.default is not None
-        }
+        result: dict[str, Any] = {}
+        for param in definition.params:
+            if param.type == "image":
+                result[param.key] = "data:image/png;base64,<BASE64编码的图片内容>"
+            elif param.default is not None:
+                result[param.key] = param.default
+        return result
 
     def _update_doc_index(self) -> None:
         entries = sorted(DEFINITIONS_DIR.glob("*.json"))

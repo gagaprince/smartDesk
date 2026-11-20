@@ -1,0 +1,13 @@
+{
+  "character_turnaround": {
+    "workflow_id": "qwen_lora_txt2img",
+    "param_overrides": {
+      "lora_enabled": false
+    }
+  },
+  "first_frame": "",
+  "last_frame": "",
+  "scene_frame": "",
+  "reference": "",
+  "generic": ""
+}
