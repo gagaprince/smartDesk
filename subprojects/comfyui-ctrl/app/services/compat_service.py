@@ -85,6 +85,12 @@ class CompatService:
         路由项支持两种写法:
         - ``"task_type": "workflow_id"``
         - ``"task_type": {"workflow_id": "...", "param_overrides": {...}}``
+        - 条件路由（按是否携带参考图分流）::
+
+              "task_type": {
+                  "without_images": {"workflow_id": "...", "param_overrides": {}},
+                  "with_images": {"workflow_id": "...", "param_overrides": {}}
+              }
         """
         routing = {
             task_type: {"workflow_id": "", "param_overrides": {}}
@@ -108,6 +114,20 @@ class CompatService:
                         "param_overrides": {},
                     }
             elif isinstance(entry, dict):
+                if "without_images" in entry or "with_images" in entry:
+                    routing[task_type] = {
+                        "workflow_id": "",
+                        "param_overrides": {},
+                        "conditional": {
+                            False: self._parse_route_branch(
+                                entry.get("without_images"), task_type, "without_images"
+                            ),
+                            True: self._parse_route_branch(
+                                entry.get("with_images"), task_type, "with_images"
+                            ),
+                        },
+                    }
+                    continue
                 workflow_id = entry.get("workflow_id")
                 overrides = entry.get("param_overrides", {})
                 if isinstance(workflow_id, str) and workflow_id.strip():
@@ -122,6 +142,39 @@ class CompatService:
                         "param_overrides": overrides,
                     }
         return routing
+
+    @staticmethod
+    def _parse_route_branch(
+        branch: Any, task_type: str, branch_name: str
+    ) -> dict[str, Any]:
+        """解析条件路由的单个分支, 缺省/空值表示该条件暂未对接。"""
+        if branch is None:
+            return {"workflow_id": "", "param_overrides": {}}
+        if not isinstance(branch, dict):
+            raise CompatError(
+                500,
+                "routing_config_error",
+                f"路由项 {task_type} 的 {branch_name} 分支必须是对象",
+            )
+        workflow_id = branch.get("workflow_id")
+        overrides = branch.get("param_overrides", {})
+        if not isinstance(overrides, dict):
+            raise CompatError(
+                500,
+                "routing_config_error",
+                f"路由项 {task_type} 的 {branch_name} 分支 param_overrides 必须是对象",
+            )
+        return {
+            "workflow_id": workflow_id.strip()
+            if isinstance(workflow_id, str) else "",
+            "param_overrides": overrides,
+        }
+
+    @staticmethod
+    def _select_route(entry: dict[str, Any], has_images: bool) -> dict[str, Any]:
+        """条件路由按参考图有无选分支, 普通路由直接返回自身。"""
+        conditional = entry.get("conditional")
+        return conditional[has_images] if conditional else entry
 
     @staticmethod
     def resolve_size(body: GenRequest) -> tuple[int, int]:
@@ -218,14 +271,22 @@ class CompatService:
             )
 
         routing = self.load_routing()
-        route = routing[body.task_type]
+        width, height = self.resolve_size(body)
+        input_dir = Path(self._settings.comfyui_input_dir) if (
+            self._settings.comfyui_input_dir
+        ) else None
+        ref_filenames = self._save_reference_images(body.reference_images)
+        # 条件路由: 按本次请求是否实际携带参考图选择工作流分支
+        has_images = bool(ref_filenames)
+        route = self._select_route(routing[body.task_type], has_images)
         workflow_id = route["workflow_id"]
         if not workflow_id:
+            condition = "带参考图（with_images）" if has_images else "无参考图（without_images）"
             raise CompatError(
                 501,
                 "workflow_not_mapped",
-                f"task_type '{body.task_type}' 尚未配置工作流, "
-                f"请在 {self._routing_file()} 中填写对应的 workflow_id",
+                f"task_type '{body.task_type}' 在{condition}条件下尚未配置工作流, "
+                f"请在 {self._routing_file()} 中填写对应分支的 workflow_id",
             )
         try:
             self._workflow_service.get_workflow(workflow_id)
@@ -235,12 +296,6 @@ class CompatService:
                 "workflow_not_registered",
                 f"路由表指向的工作流 '{workflow_id}' 未在 definitions 中注册",
             ) from exc
-
-        width, height = self.resolve_size(body)
-        input_dir = Path(self._settings.comfyui_input_dir) if (
-            self._settings.comfyui_input_dir
-        ) else None
-        ref_filenames = self._save_reference_images(body.reference_images)
 
         # 约定参数键: 后续工作流 definition 声明同名参数即可自动注入,
         # 未声明的键会被 WorkflowService 忽略, 不影响当前框架链路。

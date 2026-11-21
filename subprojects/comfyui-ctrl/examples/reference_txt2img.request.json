@@ -1,0 +1,9 @@
+{
+  "model": "qwen_lora_txt2img",
+  "prompt": "山间清晨云海，远处峰峦若隐若现，国风插画，空镜无人物",
+  "n": 1,
+  "aspect_ratio": "16:9",
+  "quality": "hd",
+  "task_type": "reference",
+  "reference_images": []
+}

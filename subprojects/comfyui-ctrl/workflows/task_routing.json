@@ -14,9 +14,15 @@
     }
   },
   "reference": {
-    "workflow_id": "qwen_lora_txt2img",
-    "param_overrides": {
-      "lora_enabled": false
+    "without_images": {
+      "workflow_id": "qwen_lora_txt2img",
+      "param_overrides": {
+        "lora_enabled": false
+      }
+    },
+    "with_images": {
+      "workflow_id": "qwen_10_img_edit",
+      "param_overrides": {}
     }
   },
   "generic": ""
