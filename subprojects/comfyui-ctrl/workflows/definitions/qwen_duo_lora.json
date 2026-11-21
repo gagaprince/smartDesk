@@ -1,0 +1,243 @@
+{
+  "workflow_id": "qwen_duo_lora",
+  "name": "千问多lora文生图",
+  "description": "",
+  "template": "qwen_duo_lora.api.json",
+  "output_node": "36",
+  "params": [
+    {
+      "key": "lora_1_on",
+      "label": "lora_1 开关",
+      "type": "bool",
+      "required": false,
+      "default": true,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "35",
+        "inputs",
+        "lora_1",
+        "on"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_1_lora",
+      "label": "lora_1 模型",
+      "type": "enum",
+      "required": false,
+      "default": "qwen\\18\\传统手绘动画_古风国漫动画片.safetensors",
+      "choices": null,
+      "enum_source": "comfyui_loras",
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "35",
+        "inputs",
+        "lora_1",
+        "lora"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_1_strength",
+      "label": "lora_1 强度",
+      "type": "float",
+      "required": false,
+      "default": 1,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": 0.0,
+      "max": 10.0,
+      "path": [
+        "35",
+        "inputs",
+        "lora_1",
+        "strength"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_2_on",
+      "label": "lora_2 开关",
+      "type": "bool",
+      "required": false,
+      "default": true,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "35",
+        "inputs",
+        "lora_2",
+        "on"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_2_lora",
+      "label": "lora_2 模型",
+      "type": "enum",
+      "required": false,
+      "default": "qwen\\南宫婉.safetensors",
+      "choices": null,
+      "enum_source": "comfyui_loras",
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "35",
+        "inputs",
+        "lora_2",
+        "lora"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_2_strength",
+      "label": "lora_2 强度",
+      "type": "float",
+      "required": false,
+      "default": 1,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": 0.0,
+      "max": 10.0,
+      "path": [
+        "35",
+        "inputs",
+        "lora_2",
+        "strength"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_3_on",
+      "label": "lora_3 开关",
+      "type": "bool",
+      "required": false,
+      "default": true,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "35",
+        "inputs",
+        "lora_3",
+        "on"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_3_lora",
+      "label": "lora_3 模型",
+      "type": "enum",
+      "required": false,
+      "default": "qwen\\selftrain\\qwen_image21_lora_budingbbchest.safetensors",
+      "choices": null,
+      "enum_source": "comfyui_loras",
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "35",
+        "inputs",
+        "lora_3",
+        "lora"
+      ],
+      "paths": null
+    },
+    {
+      "key": "lora_3_strength",
+      "label": "lora_3 强度",
+      "type": "float",
+      "required": false,
+      "default": 1,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": 0.0,
+      "max": 10.0,
+      "path": [
+        "35",
+        "inputs",
+        "lora_3",
+        "strength"
+      ],
+      "paths": null
+    },
+    {
+      "key": "switch_on_false",
+      "label": "提示词",
+      "type": "string",
+      "required": false,
+      "default": "一位成年动漫女性头像，长发披肩，发丝柔顺，发尾带轻微波浪卷，面容美丽精致，眼神亲和温柔，嘴角有淡淡笑意，气质中带有一点含蓄的性感妩媚，穿着浅绿色一字肩针织上衣，肩颈线条优雅但画面优雅克制，半身近景构图，主色调为浅蓝色与浅绿色，背景是柔和的浅蓝渐变和淡淡薄荷绿色光晕，精致日系动漫插画风，皮肤通透，发丝细腻，柔和自然光，低饱和清新色彩，画面干净，适合作为个人头像",
+      "choices": null,
+      "enum_source": null,
+      "multiline": true,
+      "min": null,
+      "max": null,
+      "path": [
+        "37:24",
+        "inputs",
+        "on_false"
+      ],
+      "paths": null
+    },
+    {
+      "key": "seed",
+      "label": "种子（-1 随机）",
+      "type": "int",
+      "required": false,
+      "default": -1,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": -1125899906842624.0,
+      "max": 1125899906842624.0,
+      "path": [
+        "39",
+        "inputs",
+        "seed"
+      ],
+      "paths": null
+    },
+    {
+      "key": "aspect_ratio",
+      "label": "aspect_ratio",
+      "type": "enum",
+      "required": false,
+      "default": "9:16 (Portrait Widescreen)",
+      "choices": [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)"
+      ],
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": [
+        "38",
+        "inputs",
+        "aspect_ratio"
+      ],
+      "paths": null
+    }
+  ]
+}
