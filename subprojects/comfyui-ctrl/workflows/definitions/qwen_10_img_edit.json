@@ -1,0 +1,92 @@
+{
+  "workflow_id": "qwen_10_img_edit",
+  "name": "千问图像编辑10图版",
+  "description": "",
+  "template": "qwen_10_img_edit.api.json",
+  "output_node": "521",
+  "params": [
+    {
+      "key": "switch_on_false",
+      "label": "提示词",
+      "type": "string",
+      "required": false,
+      "default": "图上的人物在客厅吃饭，可开心了",
+      "choices": null,
+      "enum_source": null,
+      "multiline": true,
+      "min": null,
+      "max": null,
+      "path": [
+        "459:484",
+        "inputs",
+        "on_false"
+      ],
+      "paths": null,
+      "image_nodes": null
+    },
+    {
+      "key": "seed",
+      "label": "种子（-1 随机）",
+      "type": "int",
+      "required": false,
+      "default": -1,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": -1125899906842624,
+      "max": 1125899906842624,
+      "path": [
+        "522",
+        "inputs",
+        "seed"
+      ],
+      "paths": null,
+      "image_nodes": null
+    },
+    {
+      "key": "ref_images",
+      "label": "参考图",
+      "type": "image_list",
+      "required": false,
+      "default": null,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": null,
+      "max": null,
+      "path": null,
+      "paths": null,
+      "image_nodes": [
+        "505",
+        "475",
+        "529",
+        "513",
+        "531",
+        "533",
+        "535",
+        "537",
+        "539",
+        "541"
+      ]
+    },
+    {
+      "key": "steps",
+      "label": "steps",
+      "type": "int",
+      "required": false,
+      "default": 40,
+      "choices": null,
+      "enum_source": null,
+      "multiline": false,
+      "min": 1,
+      "max": 10000,
+      "path": [
+        "459:458",
+        "inputs",
+        "steps"
+      ],
+      "paths": null,
+      "image_nodes": null
+    }
+  ]
+}
