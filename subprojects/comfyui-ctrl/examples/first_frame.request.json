@@ -1,0 +1,20 @@
+{
+  "model": "qwen_10_img_edit",
+  "prompt": "参考两张图中的人物，生成两人在书房对坐喝茶的画面",
+  "n": 1,
+  "aspect_ratio": "1:1",
+  "quality": "hd",
+  "task_type": "first_frame",
+  "reference_images": [
+    {
+      "label": "人物A",
+      "mime_type": "image/png",
+      "data": "<第1张参考图的纯BASE64，不带 data: 前缀>"
+    },
+    {
+      "label": "人物B",
+      "mime_type": "image/png",
+      "data": "<第2张参考图的纯BASE64，不带 data: 前缀>"
+    }
+  ]
+}

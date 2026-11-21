@@ -5,9 +5,9 @@
       "lora_enabled": false
     }
   },
-  "first_frame": "",
-  "last_frame": "",
-  "scene_frame": "",
+  "first_frame": "qwen_10_img_edit",
+  "last_frame": "qwen_10_img_edit",
+  "scene_frame": "qwen_10_img_edit",
   "reference": "",
   "generic": ""
 }

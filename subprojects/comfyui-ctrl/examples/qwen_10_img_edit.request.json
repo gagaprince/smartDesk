@@ -1,6 +1,6 @@
 {
   "params": {
-    "switch_on_false": "保持人物身份与服装不变，把场景换成海边日落",
+    "prompt": "保持人物身份与服装不变，把场景换成海边日落",
     "seed": -1,
     "steps": 25,
     "ref_images": [

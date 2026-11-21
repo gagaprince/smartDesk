@@ -6,7 +6,7 @@
   "output_node": "521",
   "params": [
     {
-      "key": "switch_on_false",
+      "key": "prompt",
       "label": "提示词",
       "type": "string",
       "required": false,
