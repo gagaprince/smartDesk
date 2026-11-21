@@ -438,26 +438,62 @@ class WorkflowService:
     def _prune_image_nodes(
         graph: dict[str, Any], node_ids: list[str]
     ) -> None:
-        """删除节点本身, 并清理全图中指向它们的连线（[源节点 id, 槽位]）。"""
-        removed = set(node_ids)
+        """删除图片加载节点, 并级联剪除失去全部连线输入的下游节点。
+
+        剪枝分两步循环到收敛: 先删除节点并清理指向它们的连线
+        （连线格式为 ``[源节点 id, 槽位]``）; 若某个节点原本所有的
+        连线输入都因此失效（例如只服务于该参考图的缩放节点
+        ImageResizeKJv2）, 则把它一并删除, 直到没有新的孤立节点。
+        仍保留至少一条有效连线的节点（如多图汇聚的编码节点）不会被剪。
+        """
+        removed = {str(node_id) for node_id in node_ids}
         if not removed:
             return
-        for node_id in removed:
-            graph.pop(node_id, None)
-        for node in graph.values():
-            inputs = node.get("inputs")
-            if not isinstance(inputs, dict):
-                continue
-            for input_name in list(inputs):
-                value = inputs[input_name]
-                if (
-                    isinstance(value, list)
-                    and len(value) == 2
-                    and isinstance(value[0], str)
-                    and isinstance(value[1], int)
-                    and value[0] in removed
-                ):
-                    del inputs[input_name]
+        # 记录每个节点最初拥有的连线输入, 作为"是否变成孤立节点"的判定基准
+        link_inputs: dict[str, set[str]] = {}
+        for current_id, node in graph.items():
+            names = {
+                name
+                for name, value in (node.get("inputs") or {}).items()
+                if WorkflowService._is_link(value)
+            }
+            if names:
+                link_inputs[current_id] = names
+        while True:
+            for node_id in removed:
+                graph.pop(node_id, None)
+            for node in graph.values():
+                inputs = node.get("inputs")
+                if not isinstance(inputs, dict):
+                    continue
+                for input_name in list(inputs):
+                    value = inputs[input_name]
+                    if WorkflowService._is_link(value) and value[0] in removed:
+                        del inputs[input_name]
+            orphaned = set()
+            for current_id, original_names in link_inputs.items():
+                if current_id in removed or current_id not in graph:
+                    continue
+                current_inputs = graph[current_id].get("inputs") or {}
+                still_linked = any(
+                    name in current_inputs
+                    and WorkflowService._is_link(current_inputs[name])
+                    for name in original_names
+                )
+                if not still_linked:
+                    orphaned.add(current_id)
+            if not orphaned:
+                break
+            removed |= orphaned
+
+    @staticmethod
+    def _is_link(value: Any) -> bool:
+        return (
+            isinstance(value, list)
+            and len(value) == 2
+            and isinstance(value[0], str)
+            and isinstance(value[1], int)
+        )
 
     # ------------------------------------------------------------------
     # Image params: data URL / base64 -> ComfyUI upload -> widget filename
