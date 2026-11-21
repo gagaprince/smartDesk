@@ -1,0 +1,9 @@
+{
+  "model": "qwen_lora_txt2img",
+  "prompt": "中式古典书房场景，木质书架与暖黄灯笼，午后阳光透过窗棂，空镜头无人物，电影感光影",
+  "n": 1,
+  "aspect_ratio": "16:9",
+  "quality": "hd",
+  "task_type": "scene_frame",
+  "reference_images": []
+}

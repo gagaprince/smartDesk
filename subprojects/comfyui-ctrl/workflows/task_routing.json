@@ -7,7 +7,17 @@
   },
   "first_frame": "qwen_10_img_edit",
   "last_frame": "qwen_10_img_edit",
-  "scene_frame": "qwen_10_img_edit",
-  "reference": "",
+  "scene_frame": {
+    "workflow_id": "qwen_lora_txt2img",
+    "param_overrides": {
+      "lora_enabled": false
+    }
+  },
+  "reference": {
+    "workflow_id": "qwen_lora_txt2img",
+    "param_overrides": {
+      "lora_enabled": false
+    }
+  },
   "generic": ""
 }
