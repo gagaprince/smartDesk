@@ -1,0 +1,11 @@
+{
+  "params": {
+    "switch_on_false": "保持人物身份与服装不变，把场景换成海边日落",
+    "seed": -1,
+    "steps": 25,
+    "ref_images": [
+      "data:image/png;base64,<第1张参考图的BASE64>",
+      "data:image/png;base64,<第2张参考图的BASE64>"
+    ]
+  }
+}
