@@ -5,6 +5,8 @@ import Dashboard from '@/render/views/Dashboard.vue';
 import Setting from '@/render/views/Setting.vue';
 import BatchVideoDownload from '@/render/views/BatchVideoDownload.vue';
 import HeadCut from '@/render/views/HeadCut.vue';
+// eslint-disable-next-line import/extensions
+import SmartCut from '@/render/views/SmartCut.vue';
 import LoraLibrary from '@/render/views/LoraLibrary.vue';
 import WorkflowAdminPage from '@/render/views/WorkflowAdminPage.vue';
 import WorkflowPage from '@/render/views/WorkflowPage.vue';
@@ -33,6 +35,11 @@ const routes = [
                 path: 'tool/head-cut',
                 name: 'head-cut',
                 component: HeadCut,
+            },
+            {
+                path: 'tool/smart-cut',
+                name: 'smart-cut',
+                component: SmartCut,
             },
             {
                 path: 'prod/lora-library',

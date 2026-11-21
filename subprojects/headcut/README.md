@@ -29,10 +29,17 @@ headcut/
 │   ├── cli.py             # 命令行参数与批处理流程
 │   ├── detector.py        # YuNet 人脸检测封装（含模型自动下载）
 │   ├── cropper.py         # 正方形裁切区域计算、补边与缩放
+│   ├── smartcut_cli.py    # 智能裁切入口: 视频抽帧 + 多部位裁切
+│   ├── pose_detector.py   # YOLO11-pose 人体关键点检测（含模型自动下载）
+│   ├── part_segmenter.py  # SegFormer-B2 服装语义分割, AI 部位识别（含模型自动下载）
+│   ├── body_planner.py    # 头/胸/腿/手/脚裁切规划与提示词解析（分割优先, 关键点兜底）
+│   ├── video_utils.py     # 视频发现与按时间均分抽帧
 │   ├── bgremove.py        # 可选：rembg 人像分割去背景（含模型自动下载）
 │   ├── io_utils.py        # 图像读写（EXIF 校正、中文路径）
 │   └── models/
 │       ├── face_detection_yunet_2023mar.onnx
+│       ├── yolo11n-pose.onnx
+│       ├── segformer_b2_clothes.onnx  # AI 部位分割模型（首次使用自动下载, 约 110MB）
 │       └── rembg/         # 去背景模型（首次使用自动下载, 已 gitignore）
 ├── requirements.txt
 ├── requirements-bg.txt    # 去背景可选依赖 (rembg + onnxruntime)
@@ -212,6 +219,48 @@ python -m headcut photos -r --format jpg --jpeg-quality 98 -o dataset
 - 模型首次使用时自动下载到 `headcut/models/rembg/`，已被 gitignore，不会提交进仓库；
   下载源按 ModelScope → HuggingFace 镜像 → GitHub 的顺序自动回退。
 - 同一次批处理中模型只加载一次，批量处理时第一张稍慢、后续很快。
+
+## 一键智能裁切（图片/视频 · 多部位）
+
+除头像裁切外，包内还提供 `headcut.smartcut_cli` 模块（与原 `headcut` 完全独立，
+互不影响），面向 LoRA 多部位素材制作：
+
+- **视频抽帧**：视频按时间均分成 N 段，取每段中点的画面（`--frames N`，默认 5），
+  抽帧结果再逐张执行裁切；图片则直接处理
+- **多部位裁切**：支持头部 / 胸部 / 腿部 / 手部 / 脚部（`--parts head,chest,legs,hand,foot`），
+  被遮挡的手/脚自动跳过
+- **AI 部位识别（默认开启）**：胸/腿/手/脚优先用 HuggingFace `mattmdjaga/segformer_b2_clothes`
+  （SegFormer-B2，18 类服装/人体像素级语义分割，纯 ONNX 推理）定位，比关键点几何推算更精准；
+  模型缺失、推理失败或 mask 过弱时自动回退 YOLO-pose 关键点方案，裁切边长公式与 `--scale`
+  语义在两种方案下完全一致；头部始终走 YuNet 人脸检测，不参与分割。加 `--no-seg` 可关闭，
+  模型路径可用环境变量 `SMARTCUT_SEG_MODEL` 指定；调试图（`--save-debug`）会用半透明色块
+  叠加 AI 识别到的部位区域并标注「AI识别」
+- **提示词驱动**：`--prompt "需要头像和手部特写"` 自动识别中/英文部位关键词，
+  命中后优先于 `--parts`；都未指定时默认裁切头部
+- **统一裁切比例**：`--scale`（默认 2.6）对头/胸/腿/手/脚统一生效，各部位基准框按该倍数整体缩放，调大画面更宽松、调小更贴近主体，2.6 为默认调校基准
+- **头部双保险**：优先复用 YuNet 人脸检测，无人脸时用姿态关键点兜底
+- **识别区域调试图**：加 `--save-debug` 后，每个处理单元在输出目录的 `_debug` 子文件夹保存一张标注图，画出人体框、关键点骨架（绿色=可见、灰色=低于阈值）、人脸框与各部位裁切框及边长，便于核对识别位置与排查漏检，调试图不会出现在正常结果列表中
+- 输出文件名带部位后缀，如 `video_f000135_head.jpg`、`video_f000135_hand1.jpg`
+- 同样支持递归目录、去背景、自定义输出尺寸、中文与 emoji 路径
+
+```powershell
+# 目录内图片与视频一起处理, 每个视频抽 5 帧, 裁切全部五个部位
+python -m headcut.smartcut_cli D:\素材 -o D:\out --parts head,chest,legs,hand,foot --frames 5
+
+# 用提示词决定裁切部位
+python -m headcut.smartcut_cli D:\素材 -o D:\out --prompt "裁切模特的胸部、腿部和脚部"
+
+# 先空跑检查计划, 不写文件
+python -m headcut.smartcut_cli D:\素材 -o D:\out --parts head,hand --dry-run
+```
+
+依赖说明：智能裁切需要 `onnxruntime`（去背景可选依赖已包含，即
+`pip install -e ".[bg]"`），无需安装 torch/transformers；姿态模型
+`yolo11n-pose.onnx`（约 12MB）随包分发，缺失时按 GitHub → 镜像顺序自动下载，
+也可用环境变量 `SMARTCUT_POSE_MODEL` 指定。AI 分割模型
+`segformer_b2_clothes.onnx`（约 110MB）首次用到胸/腿/手/脚时自动从
+HuggingFace 镜像下载到 `headcut/models/`，也可预先手动放置或用
+`SMARTCUT_SEG_MODEL` 指定。
 
 ## 被其他服务调用
 

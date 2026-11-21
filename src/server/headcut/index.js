@@ -40,7 +40,7 @@ const ensureInsideOutput = (filePath, dir) => {
     return resolved;
 };
 
-const listOutputImages = async (dir) => {
+export const listOutputImages = async (dir) => {
     if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
         return { success: false, message: '输出目录不存在', images: [] };
     }
@@ -68,7 +68,7 @@ const listOutputImages = async (dir) => {
     return { success: true, images };
 };
 
-const readOutputImage = async (filePath, dir) => {
+export const readOutputImage = async (filePath, dir) => {
     try {
         const resolved = ensureInsideOutput(filePath, dir);
         if (!fs.existsSync(resolved)) {
@@ -92,7 +92,7 @@ const readOutputImage = async (filePath, dir) => {
     }
 };
 
-const deleteOutputFile = async (filePath, dir) => {
+export const deleteOutputFile = async (filePath, dir) => {
     try {
         const resolved = ensureInsideOutput(filePath, dir);
         await fs.promises.unlink(resolved);
@@ -132,7 +132,7 @@ export const resolveHeadcutHome = (customHome) => {
     );
 };
 
-const resolvePython = (home) => {
+export const resolvePython = (home) => {
     const venvPython = process.platform === 'win32'
         ? path.join(home, '.venv', 'Scripts', 'python.exe')
         : path.join(home, '.venv', 'bin', 'python');

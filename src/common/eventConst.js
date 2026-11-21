@@ -20,6 +20,12 @@ export const HandleEvents = {
     HEAD_CUT_LIST_FILES: 'head_cut_list_files',
     HEAD_CUT_READ_IMAGE: 'head_cut_read_image',
     HEAD_CUT_DELETE_FILE: 'head_cut_delete_file',
+    // 一键智能裁切（图片/视频 + 多部位, Python headcut.smartcut_cli）
+    SMART_CUT: 'smart_cut',
+    SMART_CUT_STOP: 'smart_cut_stop',
+    SMART_CUT_LIST_FILES: 'smart_cut_list_files',
+    SMART_CUT_READ_IMAGE: 'smart_cut_read_image',
+    SMART_CUT_DELETE_FILE: 'smart_cut_delete_file',
     // 生产工具: comfyui-ctrl FastAPI 子服务
     GET_COMFYUI_BASE: 'get_comfyui_base',
     GET_COMFYUI_HEALTH: 'get_comfyui_health',
@@ -41,4 +47,5 @@ export const RenderReceiveEvents = {
     PING: 'render_ping',
     PONG: 'render_pong',
     HEAD_CUT_PROGRESS: 'head_cut_progress',
+    SMART_CUT_PROGRESS: 'smart_cut_progress',
 };

@@ -24,6 +24,12 @@ export const menuConfig = [
                 icon: 'Crop',
                 closable: true,
             },
+            {
+                path: '/tool/smart-cut',
+                title: '一键智能裁切',
+                icon: 'MagicStick',
+                closable: true,
+            },
         ],
     },
     {

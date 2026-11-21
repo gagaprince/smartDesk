@@ -97,6 +97,24 @@ export const deleteHeadCutFile = async (filePath, dir) => ipcRenderer.invoke(
     dir,
 );
 
+// 一键智能裁切（图片/视频 + 多部位）
+export const runSmartCut = async (options) => ipcRenderer.invoke(HandleEvents.SMART_CUT, options);
+export const stopSmartCut = async () => ipcRenderer.invoke(HandleEvents.SMART_CUT_STOP);
+export const listSmartCutImages = async (dir) => ipcRenderer.invoke(
+    HandleEvents.SMART_CUT_LIST_FILES,
+    dir,
+);
+export const readSmartCutImage = async (filePath, dir) => ipcRenderer.invoke(
+    HandleEvents.SMART_CUT_READ_IMAGE,
+    filePath,
+    dir,
+);
+export const deleteSmartCutFile = async (filePath, dir) => ipcRenderer.invoke(
+    HandleEvents.SMART_CUT_DELETE_FILE,
+    filePath,
+    dir,
+);
+
 // 工作台: 显卡状态与本地服务启停管理
 export const getDashboardOverview = async () => ipcRenderer.invoke(HandleEvents.GET_DASHBOARD_OVERVIEW);
 export const startDashboardService = async (id) => ipcRenderer.invoke(HandleEvents.START_SERVICE, id);

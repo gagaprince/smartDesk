@@ -20,6 +20,9 @@ demo_debug/
 # rembg 背景去除模型 (体积大, 首次使用自动下载)
 headcut/models/rembg/
 
+# AI 部位分割模型 (约 110MB, 首次使用自动下载)
+headcut/models/segformer_b2_clothes.onnx
+
 # 编辑器 / 系统
 .idea/
 .vscode/
