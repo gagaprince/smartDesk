@@ -504,6 +504,9 @@ export default {
                 .filter((param) => param.required)
                 .filter((param) => {
                     const value = this.paramValues[param.key];
+                    if (Array.isArray(value)) {
+                        return value.length === 0;
+                    }
                     return value === undefined
                         || value === null
                         || String(value).trim() === '';

@@ -20,6 +20,7 @@ import httpx
 from app.core.config import Settings, get_settings
 from app.schemas.admin import (
     EnumOptions,
+    ParsedImageGroup,
     ParsedInput,
     ParsedNode,
     ParseResult,
@@ -52,6 +53,8 @@ SWITCH_NODE_CLASS = "ComfySwitchNode"
 # ComfyUI 图片加载节点: widget 值是 input 目录文件名, 平台改造成 image 类型,
 # 调用方上传图片后由服务端换成实际文件名再注入
 IMAGE_LOADER_CLASSES = {"LoadImage", "LoadImageMask"}
+# 「参考图1/参考图2 ...」连续命名的 LoadImage 自动识别为一个多图分组
+REFERENCE_GROUP_PATTERN = re.compile(r"^参考图\s*(\d+)$")
 
 ENUM_SOURCE_SPECS: dict[str, tuple[str, str]] = {
     "checkpoints": ("CheckpointLoaderSimple", "ckpt_name"),
@@ -153,12 +156,56 @@ class WorkflowAdminService:
                     inputs=parsed_inputs,
                 )
             )
+        image_groups = self._build_image_groups(graph)
+        group_of_node = {
+            node_id: group.group_key
+            for group in image_groups
+            for node_id in group.image_nodes
+        }
+        if group_of_node:
+            # 分组成员不再单独建议导出, 避免与 image_list 参数重复绑定
+            for parsed_node in nodes:
+                if parsed_node.node_id not in group_of_node:
+                    continue
+                for parsed_input in parsed_node.inputs:
+                    if parsed_input.inferred_type == "image":
+                        parsed_input.group_key = group_of_node[parsed_node.node_id]
+                        parsed_input.suggest_export = False
         return ParseResult(
             node_count=len(graph),
             output_candidates=self._rank_output_candidates(graph, output_candidates),
             nodes=nodes,
+            image_groups=image_groups,
             warnings=warnings,
         )
+
+    def _build_image_groups(self, graph: dict[str, Any]) -> list[ParsedImageGroup]:
+        """把标题为连续「参考图N」的 LoadImage 节点收敛成一个 image_list 分组。"""
+        members: list[tuple[int, str, str]] = []
+        for node_id, node in graph.items():
+            if not isinstance(node, dict) \
+                    or node.get("class_type") not in IMAGE_LOADER_CLASSES:
+                continue
+            title = ((node.get("_meta") or {}).get("title") or "").strip()
+            match = REFERENCE_GROUP_PATTERN.match(title)
+            if match:
+                members.append((int(match.group(1)), str(node_id), title))
+        if len(members) < 2:
+            return []
+        members.sort(key=lambda item: item[0])
+        indices = [item[0] for item in members]
+        if indices != list(range(1, len(indices) + 1)):
+            return []
+        return [
+            ParsedImageGroup(
+                group_key="reference_images",
+                label=f"参考图（共 {len(members)} 张，可合并为一个多图参数）",
+                suggest_key="ref_images",
+                suggest_label="参考图",
+                image_nodes=[item[1] for item in members],
+                node_titles=[item[2] for item in members],
+            )
+        ]
 
     @staticmethod
     def _rank_output_candidates(
@@ -534,8 +581,12 @@ class WorkflowAdminService:
                 f"{'是' if param.required else '否'} | "
                 f"{self._format_default(param.default)} | {value_domain} |"
             )
-        image_params = [param for param in definition.params if param.type == "image"]
+        image_params = [
+            param for param in definition.params
+            if param.type in ("image", "image_list")
+        ]
         if image_params:
+            list_params = [param for param in image_params if param.type == "image_list"]
             lines.extend(
                 [
                     "",
@@ -551,6 +602,15 @@ class WorkflowAdminService:
                     "调用方不需要知道 ComfyUI 的本地目录结构。",
                 ]
             )
+            for param in list_params:
+                limit = len(param.image_nodes or [])
+                lines.extend(
+                    [
+                        "",
+                        f"- `{param.key}` 为多图数组参数：按参考图顺序传 1~{limit} 张，"
+                        "JSON 中写成字符串数组，服务端自动占用对应数量的图片槽位并剪除多余节点。",
+                    ]
+                )
         lines.extend(
             [
                 "",
@@ -582,6 +642,9 @@ class WorkflowAdminService:
     def _param_value_domain(param: Any) -> str:
         if param.type == "image":
             return "图片：data URL / base64 / 已上传文件名"
+        if param.type == "image_list":
+            limit = len(param.image_nodes or [])
+            return f"图片数组（1~{limit} 张，元素为 data URL / base64 / 已上传文件名）"
         if param.enum_source:
             return f"动态枚举：{param.enum_source}"
         if param.choices:
@@ -604,6 +667,11 @@ class WorkflowAdminService:
         for param in definition.params:
             if param.type == "image":
                 result[param.key] = "data:image/png;base64,<BASE64编码的图片内容>"
+            elif param.type == "image_list":
+                result[param.key] = [
+                    "data:image/png;base64,<第1张图片BASE64>",
+                    "data:image/png;base64,<第2张图片BASE64>",
+                ]
             elif param.default is not None:
                 result[param.key] = param.default
         return result

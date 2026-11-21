@@ -28,9 +28,22 @@ class ParsedInput(BaseModel):
     multiline: bool = False
     min: float | None = None
     max: float | None = None
+    # 属于某个多图分组（如「参考图N」）时携带分组 id, 前端据此收敛为 image_list 参数
+    group_key: str | None = None
     suggest_export: bool = False
     suggest_key: str | None = None
     suggest_label: str | None = None
+
+
+class ParsedImageGroup(BaseModel):
+    """一组连续的参考图加载节点, 可合并为一个 image_list 外部参数。"""
+
+    group_key: str
+    label: str
+    suggest_key: str
+    suggest_label: str
+    image_nodes: list[str]
+    node_titles: list[str]
 
 
 class ParsedNode(BaseModel):
@@ -45,6 +58,7 @@ class ParseResult(BaseModel):
     node_count: int
     output_candidates: list[str]
     nodes: list[ParsedNode]
+    image_groups: list[ParsedImageGroup] = []
     warnings: list[str]
 
 

@@ -51,10 +51,14 @@ export const TYPE_OPTIONS = [
     { value: 'bool', label: '布尔 bool' },
     { value: 'enum', label: '枚举 enum' },
     { value: 'image', label: '图片 image（上传/Base64）' },
+    { value: 'image_list', label: '多图 image_list（有序图片数组）' },
 ];
 
 // 草稿以路径拼出来的字符串作为 key
 export const pathKey = (segments) => segments.join('>');
+
+// 参考图分组（image_list）在 drafts 中的键, 与普通节点路径键共用一个命名空间
+export const imageGroupDraftKey = (groupKey) => pathKey(['image_group', groupKey]);
 
 // 读取图中指定路径的值
 export const getAtPath = (graph, segments) => {

@@ -147,6 +147,69 @@
           本地选图会自动转 base64 提交；接口也支持 data URL、纯 base64 或已上传文件名
         </div>
       </div>
+      <div
+        v-else-if="param.type === 'image_list'"
+        class="image-list-param"
+      >
+        <el-upload
+          :ref="(el) => registerUploadRef(param.key, el)"
+          :show-file-list="false"
+          :auto-upload="false"
+          accept="image/*"
+          multiple
+          :on-change="(file) => handleImageListChange(param.key, file, imageListMax(param))"
+        >
+          <el-button>
+            <el-icon><UploadFilled /></el-icon>
+            <span>添加参考图（可多选）</span>
+          </el-button>
+        </el-upload>
+        <div
+          v-for="(item, index) in imageListValue(param.key)"
+          :key="index"
+          class="image-list-item"
+        >
+          <el-tag
+            size="small"
+            type="info"
+          >
+            第 {{ index + 1 }} 张
+          </el-tag>
+          <el-image
+            :src="item"
+            fit="cover"
+            :preview-src-list="imageListValue(param.key)"
+            class="image-list-thumb"
+          />
+          <el-button-group>
+            <el-button
+              size="small"
+              :disabled="index === 0"
+              @click="moveImageListItem(param.key, index, -1)"
+            >
+              上移
+            </el-button>
+            <el-button
+              size="small"
+              :disabled="index === imageListValue(param.key).length - 1"
+              @click="moveImageListItem(param.key, index, 1)"
+            >
+              下移
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="removeImageListItem(param.key, index)"
+            >
+              移除
+            </el-button>
+          </el-button-group>
+        </div>
+        <div class="param-key-hint">
+          按顺序作为参考图 1~N 提交{{ imageListMax(param.key) ? `，最多 ${imageListMax(param.key)} 张` : ''
+          }}；参数 key：{{ param.key }}
+        </div>
+      </div>
       <el-input
         v-else
         :model-value="stringValue(param.key)"
@@ -345,6 +408,44 @@ export default {
             this.emitChange(key, null);
             this.uploadRefs[key]?.clearFiles();
         },
+        handleImageListChange(key, uploadFile, maxImages) {
+            const file = uploadFile.raw;
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                const current = Array.isArray(this.values[key])
+                    ? [...this.values[key]]
+                    : [];
+                if (maxImages && current.length >= maxImages) {
+                    this.$message.warning(`该参数最多支持 ${maxImages} 张参考图`);
+                    return;
+                }
+                current.push(reader.result);
+                this.emitChange(key, current);
+            };
+            reader.onerror = () => this.$message.error('图片读取失败');
+            reader.readAsDataURL(file);
+            this.uploadRefs[key]?.clearFiles();
+        },
+        imageListValue(key) {
+            return Array.isArray(this.values[key]) ? this.values[key] : [];
+        },
+        imageListMax(param) {
+            return Array.isArray(param.image_nodes) ? param.image_nodes.length : 0;
+        },
+        removeImageListItem(key, index) {
+            const current = [...this.imageListValue(key)];
+            current.splice(index, 1);
+            this.emitChange(key, current);
+        },
+        moveImageListItem(key, index, offset) {
+            const current = [...this.imageListValue(key)];
+            const target = index + offset;
+            if (target < 0 || target >= current.length) return;
+            const [item] = current.splice(index, 1);
+            current.splice(target, 0, item);
+            this.emitChange(key, current);
+        },
         hasImageValue(key) {
             const value = this.values[key];
             return value !== undefined && value !== null
@@ -427,6 +528,23 @@ export default {
 .image-thumb {
   width: 120px;
   height: 120px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+}
+.image-list-param {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.image-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.image-list-thumb {
+  width: 72px;
+  height: 72px;
   border-radius: 6px;
   border: 1px solid #dcdfe6;
 }

@@ -11,7 +11,7 @@ class ParamDef(BaseModel):
 
     key: str
     label: str
-    type: Literal["string", "int", "float", "bool", "enum", "image"]
+    type: Literal["string", "int", "float", "bool", "enum", "image", "image_list"]
     required: bool = False
     default: Any | None = None
     choices: list[str] | None = None
@@ -21,6 +21,9 @@ class ParamDef(BaseModel):
     max: float | None = None
     path: list[str | int] | None = None
     paths: list[list[str | int]] | None = None
+    # image_list 专用: 有序图片加载节点 id, 数组第 N 张图注入第 N 个节点,
+    # 超出实际张数的节点会在调用时从图中剪除（等价于运行时 bypass）
+    image_nodes: list[str] | None = None
 
 
 class WorkflowDef(BaseModel):

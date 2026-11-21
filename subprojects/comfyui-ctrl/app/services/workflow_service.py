@@ -53,6 +53,8 @@ MIME_SUFFIXES = {
     "image/gif": ".gif",
     "image/bmp": ".bmp",
 }
+# 多图参数允许承载的图片加载节点类型
+IMAGE_LOADER_CLASSES = {"LoadImage", "LoadImageMask"}
 
 
 class WorkflowInvokeError(Exception):
@@ -118,6 +120,9 @@ class WorkflowService:
     def self_check(definition: WorkflowDef, graph: dict[str, Any]) -> None:
         """Fail fast on node/input drift between definition and template."""
         for param in definition.params:
+            if param.type == "image_list":
+                WorkflowService._check_image_list(definition, param, graph)
+                continue
             paths = param.paths or ([param.path] if param.path else [])
             if not paths:
                 raise RuntimeError(
@@ -140,6 +145,42 @@ class WorkflowService:
                             f"的注入路径 {path} 在模板中不存在"
                         )
                     cursor = cursor[key]
+
+    @staticmethod
+    def _check_image_list(
+        definition: WorkflowDef, param: ParamDef, graph: dict[str, Any]
+    ) -> None:
+        """image_list 参数不使用注入路径, 改为校验有序图片加载节点列表。"""
+        node_ids = param.image_nodes or []
+        if not node_ids:
+            raise RuntimeError(
+                f"工作流 {definition.workflow_id} 参数 {param.key} 未配置 image_nodes"
+            )
+        seen: set[str] = set()
+        for raw_node_id in node_ids:
+            node_id = str(raw_node_id)
+            if node_id in seen:
+                raise RuntimeError(
+                    f"工作流 {definition.workflow_id} 参数 {param.key} "
+                    f"的 image_nodes 存在重复节点 {node_id}"
+                )
+            seen.add(node_id)
+            node = graph.get(node_id)
+            if node is None:
+                raise RuntimeError(
+                    f"工作流 {definition.workflow_id} 参数 {param.key} "
+                    f"引用了不存在的节点 {node_id}"
+                )
+            if node.get("class_type") not in IMAGE_LOADER_CLASSES:
+                raise RuntimeError(
+                    f"工作流 {definition.workflow_id} 参数 {param.key} "
+                    f"的节点 {node_id} 不是图片加载节点（LoadImage/LoadImageMask）"
+                )
+            if not isinstance(node.get("inputs"), dict) or "image" not in node["inputs"]:
+                raise RuntimeError(
+                    f"工作流 {definition.workflow_id} 参数 {param.key} "
+                    f"的节点 {node_id} 缺少 image 文件名控件"
+                )
 
     def reload(self) -> dict[str, Any]:
         """Re-scan definitions/templates without restarting the service."""
@@ -258,6 +299,11 @@ class WorkflowService:
                 else:
                     continue
 
+                if param.type == "image_list":
+                    await self._apply_image_list(
+                        graph, client, param, raw_value, uploaded_refs, submitted
+                    )
+                    continue
                 if param.type == "image":
                     value = await self._materialize_image(
                         client, raw_value, param.label, uploaded_refs
@@ -342,6 +388,76 @@ class WorkflowService:
         for part in path[1:-1]:
             cursor = cursor[str(part)]
         cursor[str(path[-1])] = value
+
+    # ------------------------------------------------------------------
+    # image_list params: ordered multi-image injection with runtime pruning
+    # ------------------------------------------------------------------
+    async def _apply_image_list(
+        self,
+        graph: dict[str, Any],
+        client: httpx.AsyncClient,
+        param: ParamDef,
+        raw_value: Any,
+        uploaded_refs: list[dict[str, str]],
+        submitted: dict[str, Any],
+    ) -> None:
+        """注入有序参考图数组, 并剪除未使用的图片加载节点。
+
+        第 N 张图填入 image_nodes 的第 N 个 LoadImage, 其余节点连同指向
+        它们的连线一起从图中删除, 效果等同于界面上的 Fast Bypasser 开关。
+        """
+        if not isinstance(raw_value, list):
+            raise ValueError(f"参数 {param.label} 需要图片数组")
+        images = [
+            item for item in raw_value
+            if item is not None and str(item).strip()
+        ]
+        if not images:
+            raise ValueError(f"参数 {param.label} 至少需要一张图片")
+        max_images = len(param.image_nodes or [])
+        if len(images) > max_images:
+            raise ValueError(
+                f"参数 {param.label} 最多支持 {max_images} 张图片，"
+                f"实际传入 {len(images)} 张"
+            )
+        filenames = [
+            await self._materialize_image(
+                client, item, param.label, uploaded_refs
+            )
+            for item in images
+        ]
+        for node_id, filename in zip(param.image_nodes, filenames):
+            graph[str(node_id)]["inputs"]["image"] = filename
+        unused_node_ids = [
+            str(node_id) for node_id in param.image_nodes[len(filenames):]
+        ]
+        self._prune_image_nodes(graph, unused_node_ids)
+        submitted[param.key] = filenames
+
+    @staticmethod
+    def _prune_image_nodes(
+        graph: dict[str, Any], node_ids: list[str]
+    ) -> None:
+        """删除节点本身, 并清理全图中指向它们的连线（[源节点 id, 槽位]）。"""
+        removed = set(node_ids)
+        if not removed:
+            return
+        for node_id in removed:
+            graph.pop(node_id, None)
+        for node in graph.values():
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            for input_name in list(inputs):
+                value = inputs[input_name]
+                if (
+                    isinstance(value, list)
+                    and len(value) == 2
+                    and isinstance(value[0], str)
+                    and isinstance(value[1], int)
+                    and value[0] in removed
+                ):
+                    del inputs[input_name]
 
     # ------------------------------------------------------------------
     # Image params: data URL / base64 -> ComfyUI upload -> widget filename

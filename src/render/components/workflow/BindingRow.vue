@@ -11,6 +11,13 @@
           <el-tag size="small">
             {{ kindText }}
           </el-tag>
+          <el-tag
+            v-if="input.group_key"
+            size="small"
+            type="success"
+          >
+            多图分组
+          </el-tag>
           <el-text
             type="info"
             class="binding-path"

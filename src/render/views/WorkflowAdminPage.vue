@@ -182,6 +182,7 @@
         :graph="graph"
         :drafts="drafts"
         @toggle="toggleExport"
+        @toggle-group="toggleImageGroup"
         @update-draft="updateDraft"
         @update-fixed="updateFixedValue"
       />
@@ -392,6 +393,7 @@ import {
     buildDefaultValues,
     buildDraft,
     formatTime,
+    imageGroupDraftKey,
     pathKey,
     setAtPath,
 } from '@/render/common/workflowUtil';
@@ -451,6 +453,7 @@ export default {
         resolveImageUrl,
         formatTime,
         pathKey,
+        imageGroupDraftKey,
         statusMeta(status) {
             return JOB_STATUS_META[status] || { type: 'info', text: status };
         },
@@ -498,6 +501,23 @@ export default {
                 });
             });
             existing.forEach((param) => {
+                if (param.type === 'image_list') {
+                    const matchedGroup = (result.image_groups || []).find((group) => Array.isArray(param.image_nodes)
+                        && group.image_nodes.length === param.image_nodes.length
+                        && group.image_nodes.every((nodeId, index) => nodeId === param.image_nodes[index]));
+                    const groupKey = matchedGroup
+                        ? matchedGroup.group_key
+                        : (param.key || 'custom');
+                    nextDrafts[imageGroupDraftKey(groupKey)] = {
+                        ...param,
+                        path: null,
+                        paths: null,
+                        image_node_titles: matchedGroup
+                            ? [...matchedGroup.node_titles]
+                            : (param.image_node_titles || []),
+                    };
+                    return;
+                }
                 const primaryPath = (
                     param.path || (param.paths && param.paths[0]) || []
                 ).map((segment) => String(segment));
@@ -573,6 +593,29 @@ export default {
                 delete this.drafts[key];
             } else {
                 this.drafts[key] = buildDraft(input);
+            }
+        },
+        toggleImageGroup(group) {
+            const key = imageGroupDraftKey(group.group_key);
+            if (this.drafts[key]) {
+                delete this.drafts[key];
+            } else {
+                this.drafts[key] = {
+                    key: group.suggest_key,
+                    label: group.suggest_label,
+                    type: 'image_list',
+                    required: false,
+                    default: null,
+                    choices: null,
+                    enum_source: null,
+                    multiline: false,
+                    min: null,
+                    max: null,
+                    path: null,
+                    paths: null,
+                    image_nodes: [...group.image_nodes],
+                    image_node_titles: [...group.node_titles],
+                };
             }
         },
         updateDraft(key, patch) {

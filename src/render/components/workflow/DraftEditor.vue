@@ -144,6 +144,26 @@
         </template>
       </el-input>
     </div>
+    <div
+      v-if="draft.type === 'image_list'"
+      class="draft-row"
+    >
+      <el-tag
+        v-for="(label, index) in imageNodeLabels"
+        :key="index"
+        size="small"
+        type="info"
+      >
+        {{ index + 1 }}. {{ label }}
+      </el-tag>
+      <el-text
+        v-if="!imageNodeLabels.length"
+        type="warning"
+        size="small"
+      >
+        多图参数需要 image_nodes 节点列表，请通过参考图分组卡片创建，或手写定义 JSON
+      </el-text>
+    </div>
   </div>
 </template>
 
@@ -176,17 +196,27 @@ export default {
                 ? ''
                 : String(this.draft.default);
         },
+        imageNodeLabels() {
+            const titles = this.draft.image_node_titles || [];
+            const nodes = this.draft.image_nodes || [];
+            return nodes.map((nodeId, index) => titles[index] || `节点 ${nodeId}`);
+        },
     },
     methods: {
         emitChange(patch) {
             this.$emit('change', patch);
         },
         onTypeChange(type) {
-            this.emitChange({
+            const patch = {
                 type,
                 choices: type === 'enum' ? this.draft.choices : null,
                 enum_source: type === 'enum' ? this.draft.enum_source : null,
-            });
+            };
+            if (type !== 'image_list') {
+                patch.image_nodes = null;
+                patch.image_node_titles = null;
+            }
+            this.emitChange(patch);
         },
         onChoicesChange(text) {
             this.emitChange({
