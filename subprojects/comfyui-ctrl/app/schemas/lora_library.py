@@ -53,3 +53,15 @@ class DeleteLorasRequest(BaseModel):
 class DeleteLorasResult(BaseModel):
     deleted: list[str] = Field(default_factory=list)
     failed: list[dict[str, str]] = Field(default_factory=list)
+
+
+class RenameLoraRequest(BaseModel):
+    # ComfyUI 相对路径名(标签存储主键), 如 qwen\selftrain\a.safetensors
+    name: str
+    # 新文件名(不含目录), 可省略 .safetensors 后缀
+    new_name: str
+
+
+class RenameLoraResult(BaseModel):
+    old_name: str
+    new_name: str

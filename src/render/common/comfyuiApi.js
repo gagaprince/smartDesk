@@ -136,6 +136,11 @@ export const deleteLoras = (names) => request(
     { method: 'POST', body: JSON.stringify({ names }) },
 );
 
+export const renameLora = (name, newName) => request(
+    '/admin/lora-library/rename',
+    { method: 'POST', body: JSON.stringify({ name, new_name: newName }) },
+);
+
 // 缩略图与模型同目录同名, 保存后用 bust 参数强制刷新缓存
 export const buildLoraThumbnailUrl = (name, bust = 0) => (
     `${baseUrl}${API_PREFIX}/admin/lora-library/thumbnail?name=${encodeURIComponent(name)}&t=${bust}`

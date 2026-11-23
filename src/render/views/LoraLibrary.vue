@@ -141,7 +141,16 @@
             目录外
           </el-tag>
           <el-button
-            v-else
+            v-if="lora.managed"
+            class="rename-badge"
+            type="primary"
+            title="重命名该模型（同步预览图与标签）"
+            @click.stop="openRenameDialog(lora)"
+          >
+            <el-icon><EditPen /></el-icon>
+          </el-button>
+          <el-button
+            v-if="lora.managed"
             class="delete-badge"
             type="danger"
             :loading="deleting"
@@ -345,6 +354,39 @@
     </el-dialog>
 
     <el-dialog
+      v-model="renameDialogVisible"
+      title="修改模型名称"
+      width="440px"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="模型文件、同名预览图与标签会一起改名，仅支持修改文件名，不能更换目录"
+      />
+      <div class="rename-current">
+        当前路径：{{ renameTarget }}
+      </div>
+      <el-input
+        v-model="renameValue"
+        placeholder="输入新的模型名称（无需 .safetensors 后缀）"
+        @keyup.enter="confirmRename"
+      />
+      <template #footer>
+        <el-button @click="renameDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="renaming"
+          @click="confirmRename"
+        >
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="tagDialogVisible"
       title="批量打标"
       width="520px"
@@ -417,6 +459,7 @@ import {
     invokeWorkflow,
     fetchJob,
     resolveImageUrl,
+    renameLora,
     saveLoraDimensions,
     saveLoraThumbnail,
 } from '@/render/common/comfyuiApi';
@@ -454,6 +497,10 @@ export default {
             currentJob: null,
             pollTimer: null,
             savingThumb: false,
+            renameDialogVisible: false,
+            renameTarget: '',
+            renameValue: '',
+            renaming: false,
         };
     },
     computed: {
@@ -692,6 +739,36 @@ export default {
                 this.$message.error(`删除失败：${err.message || err}`);
             } finally {
                 this.deleting = false;
+            }
+        },
+        openRenameDialog(lora) {
+            this.renameTarget = lora.name;
+            this.renameValue = this.loraBaseName(lora.name);
+            this.renameDialogVisible = true;
+        },
+        async confirmRename() {
+            const newName = this.renameValue.trim();
+            if (!newName) {
+                this.$message.warning('模型名称不能为空');
+                return;
+            }
+            this.renaming = true;
+            try {
+                const result = await renameLora(this.renameTarget, newName);
+                this.$message.success('模型已重命名');
+                this.selectedNames = this.selectedNames.map((name) => (
+                    name === result.old_name ? result.new_name : name
+                ));
+                if (this.selectedLora === result.old_name) {
+                    this.selectedLora = result.new_name;
+                }
+                this.renameDialogVisible = false;
+                this.thumbBust += 1;
+                await this.loadLibrary(true);
+            } catch (err) {
+                this.$message.error(`重命名失败：${err.message || err}`);
+            } finally {
+                this.renaming = false;
             }
         },
         tagTexts(lora) {
@@ -974,6 +1051,27 @@ export default {
   top: 6px;
   right: 6px;
   z-index: 2;
+}
+.rename-badge {
+  position: absolute;
+  top: 6px;
+  right: 38px;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+.rename-badge:hover {
+  opacity: 1;
+}
+.rename-current {
+  margin: 12px 0 8px;
+  color: #606266;
+  font-size: 13px;
+  word-break: break-all;
 }
 .delete-badge {
   position: absolute;

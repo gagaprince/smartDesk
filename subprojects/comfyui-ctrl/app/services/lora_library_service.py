@@ -31,6 +31,8 @@ DATA_URL_PATTERN = re.compile(
     r"^data:(?P<mime>[\w.+-]+/[\w.+-]+);base64,(?P<data>.+)$", re.DOTALL
 )
 PNG_SIGNATURE = b"\x89PNG"
+# Windows 文件名非法字符(含 0x00-0x1f 控制字符)
+INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
 DEFAULT_DIMENSIONS: list[dict] = [
     {
@@ -252,6 +254,68 @@ class LoraLibraryService:
         thumbnail_path.write_bytes(raw)
         logger.info("lora thumbnail saved: %s", thumbnail_path)
         return thumbnail_path
+
+    def rename_lora(self, name: str, new_name: str) -> dict:
+        """重命名受管模型, 同名 png 预览图与标签主键同步迁移, 仅允许改名不允许换目录。"""
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("模型名称不合法")
+        model_path = self.resolve_model_path(name)
+        if model_path is None:
+            raise ValueError("模型文件不在已配置的 LoRA 根目录内，无法重命名")
+
+        raw_new_name = (new_name or "").strip()
+        if not raw_new_name:
+            raise ValueError("新名称不能为空")
+        if "\\" in raw_new_name or "/" in raw_new_name or Path(raw_new_name).name != raw_new_name:
+            raise ValueError("仅支持修改文件名，不允许包含路径分隔符")
+        if INVALID_FILENAME_CHARS.search(raw_new_name):
+            raise ValueError('名称包含非法字符（\\ / : * ? " < > |），请修改后重试')
+        if not raw_new_name.lower().endswith(".safetensors"):
+            raw_new_name = f"{raw_new_name}.safetensors"
+        raw_new_name = raw_new_name.rstrip(" .")
+        if raw_new_name in (".safetensors", ""):
+            raise ValueError("新名称不合法")
+
+        target_path = model_path.with_name(raw_new_name)
+        if target_path == model_path:
+            raise ValueError("新名称与原名称相同")
+        if target_path.exists():
+            raise ValueError(f"目标文件已存在：{raw_new_name}")
+
+        root = None
+        for configured_root in self._settings.lora_roots:
+            root_resolved = configured_root.resolve()
+            if model_path.resolve().is_relative_to(root_resolved):
+                root = root_resolved
+                break
+        if root is None:
+            raise ValueError("模型文件不在已配置的 LoRA 根目录内，无法重命名")
+
+        thumbnail_path = model_path.with_suffix(".png")
+        target_thumbnail = target_path.with_suffix(".png")
+        if thumbnail_path.is_file() and target_thumbnail.exists():
+            raise ValueError(f"同名预览图已存在：{target_thumbnail.name}")
+
+        model_path.rename(target_path)
+        renamed_thumbnail = False
+        try:
+            if thumbnail_path.is_file():
+                thumbnail_path.rename(target_thumbnail)
+                renamed_thumbnail = True
+        except OSError:
+            # 预览图改名失败时回滚模型改名, 保持模型与预览图成对一致
+            target_path.rename(model_path)
+            raise
+
+        new_relative_name = str(target_path.relative_to(root))
+        tags_map = self._store.setdefault("tags", {})
+        if name in tags_map:
+            tags_map[new_relative_name] = tags_map.pop(name)
+        self._save()
+        logger.info(
+            "lora renamed: %s -> %s (thumbnail=%s)", name, new_relative_name, renamed_thumbnail
+        )
+        return {"old_name": name, "new_name": new_relative_name}
 
     def delete_loras(self, names: list[str]) -> dict:
         """Delete model files together with same-name thumbnails and tags.

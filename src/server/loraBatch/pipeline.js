@@ -90,6 +90,23 @@ const cleanTrainerProjectState = (job) => {
     appendLog(job, 'crop', '已清理训练器中该项目的旧缓存与旧训练输出，确保从零训练');
 };
 
+// 导出文件名以抓取到的人物昵称为主体, Windows 非法字符替换为下划线, 保留中文/字母/数字
+const sanitizeModelNamePart = (name) => String(name || '')
+    .replace(/[\\/:*?"<>|＼／：＊？＂＜＞｜]/g, '_')
+    .replace(/[ .]+$/g, '')
+    .trim();
+
+// 目标目录已存在同名文件时追加序号, 避免静默覆盖其他人物的模型
+const resolveExportFileName = (exportDir, namePart) => {
+    let fileName = `qwen_image21_lora_${namePart}.safetensors`;
+    let seq = 2;
+    while (fs.existsSync(path.join(exportDir, fileName))) {
+        fileName = `qwen_image21_lora_${namePart}_${seq}.safetensors`;
+        seq += 1;
+    }
+    return fileName;
+};
+
 // ---------------- comfyui-ctrl 子服务调用(统一响应包络 {code,message,data}) ----------------
 
 const ctrlRequest = async (method, url, body) => {
@@ -369,9 +386,12 @@ async function stageTrain(job, hooks) {
 async function stageExport(job) {
     const exportDir = getConfig().loraExportDir;
     fs.mkdirSync(exportDir, { recursive: true });
-    const finalName = `qwen_image21_lora_${job.projectName}.safetensors`;
+    // 优先用抓取到的人物昵称命名, 昵称为空时回退项目名
+    const namePart = sanitizeModelNamePart(job.nickname) || job.projectName;
+    const finalName = resolveExportFileName(exportDir, namePart);
     const ret = await exportLora(exportDir, finalName);
     job.paths.exportFile = ret.dest || path.join(exportDir, ret.filename || finalName);
+    appendLog(job, 'export', `模型按人物昵称导出：${finalName}`);
 }
 
 // ---------------- 阶段 7: 自动生图预览 + 缩略图 + 分类打标 ----------------

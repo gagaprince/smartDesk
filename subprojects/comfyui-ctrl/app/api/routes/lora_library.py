@@ -11,6 +11,8 @@ from app.schemas.lora_library import (
     DeleteLorasResult,
     DimensionsRequest,
     LibraryOverview,
+    RenameLoraRequest,
+    RenameLoraResult,
     ThumbnailRequest,
 )
 from app.services.lora_library_service import (
@@ -83,6 +85,20 @@ def save_thumbnail(
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"缩略图写入失败：{exc}") from exc
     return ApiResponse(data={"name": request.name, "thumbnail": str(thumbnail_path)})
+
+
+@router.post("/rename", response_model=ApiResponse[RenameLoraResult])
+def rename_lora(
+    request: RenameLoraRequest,
+    service: LoraLibraryService = Depends(get_lora_library_service),
+) -> ApiResponse[RenameLoraResult]:
+    try:
+        result = service.rename_lora(request.name, request.new_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"重命名失败：{exc}") from exc
+    return ApiResponse(data=RenameLoraResult(**result))
 
 
 @router.post("/delete", response_model=ApiResponse[DeleteLorasResult])
