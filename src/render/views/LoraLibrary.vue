@@ -447,7 +447,7 @@ export default {
             pickerVisible: false,
             selectedLora: '',
             thumbBust: 0,
-            prompt: '',
+            prompt: '漂亮少女，真人，姿态自然，头像感，特别特别瘦，白皙皮肤。梦核风格的前置摄像头抓拍画面，有一种抓拍的随性松弛氛围感，ins风，随手记录。画面里的少女超级漂亮，低分辨率，露出的脸和皮肤微微曝光，柔顺头发，盘发，午后的阳光洒在身上形成漂亮的光影，优美的姿势，背景是庄园式农场草原树林，充满生命力，生机勃勃。',
             strength: 1.0,
             testWorkflowReady: false,
             generating: false,

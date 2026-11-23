@@ -335,6 +335,13 @@ const resolveServiceConfig = (id) => {
     return { ...(discovered || {}), ...(override || {}) };
 };
 
+// loraBatch 复用: 解析 AcademiaSD 安装目录(训练器的 Cache_Data/Outputs 相对路径都基于它)
+export const getAcademiaHome = () => {
+    const cfg = resolveServiceConfig('academia');
+    return (cfg && cfg.cwd) || process.env.ACADEMIA_HOME
+        || 'E:\\aiwork\\AcademiaSD_LoRAlab-TrainerStudio';
+};
+
 // ---------------- 健康探测与进程管理 ----------------
 
 const probeService = async (meta) => {

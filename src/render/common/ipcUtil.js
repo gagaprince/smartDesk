@@ -82,6 +82,12 @@ export const downloadSmallVideoByLink = async (link, options) => ipcRenderer.inv
     options,
 );
 
+// 小红书网页版登录态（个人主页批量解析前置）
+export const xhsLogin = async () => ipcRenderer.invoke(HandleEvents.XHS_LOGIN);
+export const getXhsLoginStatus = async () => ipcRenderer.invoke(HandleEvents.XHS_LOGIN_STATUS);
+export const xhsLogout = async () => ipcRenderer.invoke(HandleEvents.XHS_LOGOUT);
+export const xhsParseProfile = async (link, options) => ipcRenderer.invoke(HandleEvents.XHS_PARSE_PROFILE, link, options);
+
 // 一键裁切头像
 export const runHeadCut = async (options) => ipcRenderer.invoke(HandleEvents.HEAD_CUT, options);
 export const stopHeadCut = async () => ipcRenderer.invoke(HandleEvents.HEAD_CUT_STOP);
@@ -132,3 +138,15 @@ export const getOllamaModels = async () => ipcRenderer.invoke(HandleEvents.GET_O
 export const getLanServerStatus = async () => ipcRenderer.invoke(HandleEvents.GET_LAN_SERVER_STATUS);
 export const startLanServerApi = async () => ipcRenderer.invoke(HandleEvents.START_LAN_SERVER);
 export const stopLanServerApi = async () => ipcRenderer.invoke(HandleEvents.STOP_LAN_SERVER);
+
+// LoRA 批量训练
+export const getLoraBatchConfig = async () => ipcRenderer.invoke(HandleEvents.LORA_BATCH_GET_CONFIG);
+export const setLoraBatchConfig = async (patch) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_SET_CONFIG, patch);
+export const listLoraBatchJobs = async () => ipcRenderer.invoke(HandleEvents.LORA_BATCH_LIST_JOBS);
+export const createLoraBatchJob = async (payload) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_CREATE_JOB, payload);
+export const stopLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_STOP_JOB, jobId);
+export const retryLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_RETRY_JOB, jobId);
+export const removeLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_REMOVE_JOB, jobId);
+export const openLoraBatchDir = async (dir) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_OPEN_DIR, dir);
+export const confirmLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_CONFIRM_JOB, jobId);
+export const recropLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_RECROP_JOB, jobId);

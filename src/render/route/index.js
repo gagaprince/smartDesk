@@ -8,6 +8,8 @@ import HeadCut from '@/render/views/HeadCut.vue';
 // eslint-disable-next-line import/extensions
 import SmartCut from '@/render/views/SmartCut.vue';
 import LoraLibrary from '@/render/views/LoraLibrary.vue';
+// eslint-disable-next-line import/extensions
+import LoraBatchTrain from '@/render/views/LoraBatchTrain.vue';
 import WorkflowAdminPage from '@/render/views/WorkflowAdminPage.vue';
 import WorkflowPage from '@/render/views/WorkflowPage.vue';
 import WorkflowApiDoc from '@/render/views/WorkflowApiDoc.vue';
@@ -45,6 +47,11 @@ const routes = [
                 path: 'prod/lora-library',
                 name: 'lora-library',
                 component: LoraLibrary,
+            },
+            {
+                path: '/prod/lora-batch-train',
+                name: 'lora-batch-train',
+                component: LoraBatchTrain,
             },
             {
                 path: 'prod/workflow-admin',

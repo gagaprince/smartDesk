@@ -14,6 +14,11 @@ export const HandleEvents = {
     // 短视频解析与下载
     GET_VIDEO_INFO: 'get_video_info',
     DOWNLOAD_SMALL_VIDEO: 'download_small_video',
+    // 小红书网页版登录态（个人主页批量解析前置）
+    XHS_LOGIN: 'xhs_login',
+    XHS_LOGIN_STATUS: 'xhs_login_status',
+    XHS_LOGOUT: 'xhs_logout',
+    XHS_PARSE_PROFILE: 'xhs_parse_profile',
     // 一键裁切头像（Python headcut 子项目）
     HEAD_CUT: 'head_cut',
     HEAD_CUT_STOP: 'head_cut_stop',
@@ -41,6 +46,17 @@ export const HandleEvents = {
     GET_LAN_SERVER_STATUS: 'get_lan_server_status',
     START_LAN_SERVER: 'start_lan_server',
     STOP_LAN_SERVER: 'stop_lan_server',
+    // LoRA 批量训练（小红书主页 -> 素材 -> 裁切 -> 训练 -> 导出 -> 预览）
+    LORA_BATCH_GET_CONFIG: 'lora_batch_get_config',
+    LORA_BATCH_SET_CONFIG: 'lora_batch_set_config',
+    LORA_BATCH_LIST_JOBS: 'lora_batch_list_jobs',
+    LORA_BATCH_CREATE_JOB: 'lora_batch_create_job',
+    LORA_BATCH_STOP_JOB: 'lora_batch_stop_job',
+    LORA_BATCH_RETRY_JOB: 'lora_batch_retry_job',
+    LORA_BATCH_REMOVE_JOB: 'lora_batch_remove_job',
+    LORA_BATCH_OPEN_DIR: 'lora_batch_open_dir',
+    LORA_BATCH_CONFIRM_JOB: 'lora_batch_confirm_job',
+    LORA_BATCH_RECROP_JOB: 'lora_batch_recrop_job',
 };
 
 export const RenderReceiveEvents = {
@@ -48,4 +64,5 @@ export const RenderReceiveEvents = {
     PONG: 'render_pong',
     HEAD_CUT_PROGRESS: 'head_cut_progress',
     SMART_CUT_PROGRESS: 'smart_cut_progress',
+    LORA_BATCH_PROGRESS: 'lora_batch_progress',
 };

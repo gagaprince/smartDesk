@@ -4,6 +4,7 @@ import { parseDyShareLink } from '@/server/lib/dy/dyBrowser';
 import { getVideoInfoFromDLpanda } from '@/server/lib/tt/ttParser';
 import { getVideoInfoByLinkFromKs } from '@/server/lib/ks/ksParser';
 import { getVideoInfoByXHSLink } from '@/server/lib/xhs/xhsParser';
+import { parseXhsNoteInWindow } from '@/server/lib/xhs/xhsProfileParser';
 import { Download } from '@/server/download/download';
 import { getVideoWorkSpace } from '../configUtil';
 import { formatDay } from '../util/date';
@@ -81,7 +82,16 @@ export const getVideoInfoByLink = async (link, options) => {
             videoInfo = await getVideoInfoByKSLink(link);
             break;
         case 'xhs':
-            videoInfo = await getVideoInfoByXHSLink(link);
+            if (options && options.xhsWindowParse) {
+                videoInfo = await parseXhsNoteInWindow({
+                    noteId: options.noteId,
+                    xsecToken: options.xsecToken,
+                    profileUrl: options.profileUrl,
+                    noteUrl: options.noteUrl,
+                });
+            } else {
+                videoInfo = await getVideoInfoByXHSLink(link);
+            }
             break;
         default:
     }
@@ -104,7 +114,11 @@ export const downloadSmallVideoByLink = async (link, options = {}) => {
         if (!videoUrl && (!images || !images.length)) {
             return info;
         }
-        const fileDir = path.resolve(getVideoWorkSpace(), formatDay(), user);
+        // LoRA 批量训练传入 targetDir 时按 任务目录/作者 组织, 否则沿用 工作区/日期/作者 的默认结构
+        const safeUser = String(user || '小红书用户').replace(/[\\/:*?"<>|]/g, '_');
+        const fileDir = options.targetDir
+            ? path.resolve(options.targetDir, safeUser)
+            : path.resolve(getVideoWorkSpace(), formatDay(), user);
         if (!fs.existsSync(fileDir)) {
             fs.mkdirSync(fileDir, { recursive: true }); // recursive选项确保创建嵌套目录
         }

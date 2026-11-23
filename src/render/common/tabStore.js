@@ -55,6 +55,12 @@ export const menuConfig = [
                 closable: true,
             },
             {
+                path: '/prod/lora-batch-train',
+                title: 'LoRA 批量训练',
+                icon: 'Histogram',
+                closable: true,
+            },
+            {
                 path: '/prod/api-doc',
                 title: '调用文档',
                 icon: 'Document',
