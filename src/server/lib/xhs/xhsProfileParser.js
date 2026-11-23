@@ -18,6 +18,8 @@ const FIND_CARD_STEPS = 40;
 const NOTE_FEED_WAIT_MS = 15000;
 const BACK_WAIT_MS = 8000;
 const MANUAL_VERIFY_MS = 90000;
+const EXEC_JS_TIMEOUT_MS = 8000;
+const NOTE_PARSE_TOTAL_MS = 120000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const toHttps = (url) => (url && url.startsWith('http://') ? url.replace('http://', 'https://') : url);
@@ -31,6 +33,24 @@ const logLine = (msg) => {
     } catch (e) {
         // 日志失败不影响主流程
     }
+};
+
+// executeJavaScript 在页面持续导航/加载未完成时会无限 pending, 统一加超时兜底
+const execJs = async (win, js, timeoutMs = EXEC_JS_TIMEOUT_MS) => {
+    if (!win || win.isDestroyed()) return null;
+    return Promise.race([
+        win.webContents.executeJavaScript(js).catch(() => null),
+        sleep(timeoutMs).then(() => null),
+    ]);
+};
+
+// loadURL 在 ERR_ABORTED 后可能进入不结束的加载态, 用超时竞速避免永久挂起
+const loadUrlBounded = async (win, url, timeoutMs = PAGE_LOAD_MS) => {
+    if (!win || win.isDestroyed()) return;
+    await Promise.race([
+        win.loadURL(url).catch((e) => logLine(`navigation aborted: ${e.message}`)),
+        sleep(timeoutMs),
+    ]);
 };
 
 let parserWin = null;
@@ -515,10 +535,10 @@ async function waitFeedCard(win, noteId) {
 }
 
 async function backToProfile(win, profileUrl) {
-    await win.webContents.executeJavaScript('window.history.back()').catch(() => {});
+    await execJs(win, 'window.history.back()');
     const deadline = Date.now() + BACK_WAIT_MS;
     while (Date.now() < deadline) {
-        const href = await win.webContents.executeJavaScript('location.href').catch(() => '');
+        const href = (await execJs(win, 'location.href')) || '';
         if (href.indexOf('/user/profile/') !== -1) {
             await sleep(1200);
             return;
@@ -526,10 +546,7 @@ async function backToProfile(win, profileUrl) {
         await sleep(800);
     }
     // back 失效时直接重新打开主页
-    await Promise.race([
-        win.loadURL(profileUrl).catch(() => {}),
-        sleep(PAGE_LOAD_MS),
-    ]);
+    await loadUrlBounded(win, profileUrl, PAGE_LOAD_MS);
     await sleep(3000);
 }
 
@@ -556,12 +573,12 @@ const buildSsrCardJs = (noteId) => `(function () {
 })()`;
 
 async function fetchNoteByDirectNav(win, noteId, noteUrl) {
-    await win.loadURL(noteUrl).catch((e) => logLine(`note direct nav aborted: ${e.message}`));
+    await loadUrlBounded(win, noteUrl, PAGE_LOAD_MS);
     const firstDeadline = Date.now() + NOTE_FEED_WAIT_MS;
     const hardDeadline = firstDeadline + MANUAL_VERIFY_MS;
     let shown = false;
     while (Date.now() < hardDeadline) {
-        const raw = await win.webContents.executeJavaScript(buildSsrCardJs(noteId)).catch(() => null);
+        const raw = await execJs(win, buildSsrCardJs(noteId));
         if (raw) {
             try {
                 const card = JSON.parse(raw);
@@ -613,13 +630,10 @@ export const parseXhsNoteInWindow = async ({
         if (!targetProfileUrl) {
             return { errorMsg: '小红书笔记详情获取失败，请稍后重试' };
         }
-        const href = await win.webContents.executeJavaScript('location.href').catch(() => '');
+        const href = (await execJs(win, 'location.href')) || '';
         if (href.indexOf('/user/profile/') === -1) {
             resetCapture();
-            await Promise.race([
-                win.loadURL(targetProfileUrl).catch(() => {}),
-                sleep(PAGE_LOAD_MS),
-            ]);
+            await loadUrlBounded(win, targetProfileUrl, PAGE_LOAD_MS);
             await sleep(4000);
         }
         // 虚拟列表：逐步滚动找到目标卡片
@@ -627,13 +641,13 @@ export const parseXhsNoteInWindow = async ({
         for (let step = 0; step < FIND_CARD_STEPS; step++) {
             card = await waitFeedCard(win, noteId);
             if (card) break;
-            const found = await win.webContents.executeJavaScript(`(function () {
+            const found = await execJs(win, `(function () {
                 const sec = Array.from(document.querySelectorAll('section.note-item'))
                     .find((el) => el.getAttribute('data-note-id') === '${noteId}');
                 if (sec) { sec.scrollIntoView({ block: 'center' }); return true; }
                 window.scrollBy(0, 1400);
                 return false;
-            })()`).catch(() => false);
+            })()`);
             if (found) {
                 await sleep(1000);
                 card = await waitFeedCard(win, noteId);
@@ -648,7 +662,14 @@ export const parseXhsNoteInWindow = async ({
         }
         return normalizeNoteCard(card, targetNoteUrl);
     };
-    const task = taskQueue.then(run, run);
+    // 整体超时兜底: 单笔记解析最长 2 分钟, 超时按失败返回, 避免冻住批量下载队列
+    const runWithTimeout = () => Promise.race([
+        run(),
+        sleep(NOTE_PARSE_TOTAL_MS).then(() => ({
+            errorMsg: '小红书笔记解析超时，请稍后重试',
+        })),
+    ]);
+    const task = taskQueue.then(runWithTimeout, runWithTimeout);
     taskQueue = task.catch(() => {});
     return task;
 };

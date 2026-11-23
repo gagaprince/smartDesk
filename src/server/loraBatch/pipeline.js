@@ -135,6 +135,8 @@ async function releaseVramForTraining(setStage) {
 async function stageDownload(job, hooks) {
     const { assertRunning, setStage } = hooks;
     setStage('download', 'running', 2, '解析小红书主页');
+    // 重试/重跑时先清空上次的半成品 raw, 下载阶段始终全量重取, 避免重复素材混入
+    fs.rmSync(job.paths.rawDir, { recursive: true, force: true });
     const profile = await parseXhsProfile(job.profileUrl, { limit: job.params.noteLimit });
     if (!profile || !profile.isProfile) {
         throw new Error((profile && profile.errorMsg) || '小红书主页解析失败');
