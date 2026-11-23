@@ -101,15 +101,15 @@
       <el-input
         v-model="form.profileUrlText"
         type="textarea"
-        :rows="3"
-        placeholder="粘贴小红书主页分享文案或链接，例如：https://xhslink.cn/o/xxxx"
+        :rows="5"
+        placeholder="粘贴小红书主页分享文案或链接，每行一个人物即可批量创建，例如：&#10;https://xhslink.cn/o/xxxx&#10;https://xhslink.cn/o/yyyy"
       />
       <div class="project-row">
         <span class="login-label">项目名：</span>
         <el-input
           v-model="form.projectName"
           class="project-input"
-          placeholder="留空自动命名，仅支持英文数字下划线短横线"
+          placeholder="单任务可指定；批量留空，自动加序号命名"
         />
         <el-button
           size="small"
@@ -142,9 +142,37 @@
           type="info"
           size="small"
         >
-          流程：下载 15 个作品 → 抽帧头部裁切（20~40 张）→ 人工确认素材 → 打标 → 预缓存 → 训练 1200 步 → 导出 → 自动生图预览打标
+          流程：批量下载（每人 15 个作品）→ 抽帧头部裁切（20~40 张）→ 集中人工确认 → 打标 → 预缓存 → 训练 1200 步 → 导出 → 自动生图预览打标
         </el-text>
       </div>
+    </el-card>
+
+    <el-card
+      v-if="awaitingJobs.length"
+      class="section-card review-entry-card"
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <div class="review-entry">
+          <div>
+            <div class="review-entry-title">
+              {{ awaitingJobs.length }} 个任务素材待人工确认（共 {{ totalReviewImages }} 张）
+            </div>
+            <div class="review-entry-desc">
+              同批任务已全部裁切完，集中审核删图后一键确认，训练阶段将串行自动执行
+            </div>
+          </div>
+          <el-button
+            type="primary"
+            @click="openReview"
+          >
+            打开批量审核
+          </el-button>
+        </div>
+      </el-alert>
     </el-card>
 
     <el-card class="section-card">
@@ -454,6 +482,129 @@
         </div>
       </template>
     </el-drawer>
+
+    <el-drawer
+      v-model="reviewVisible"
+      title="批量素材审核"
+      size="72%"
+    >
+      <template v-if="reviewBatches.length">
+        <el-alert
+          class="detail-alert"
+          type="info"
+          :closable="false"
+          show-icon
+          title="逐个人物检查裁切素材，可直接删除糊图/废图；全部合格后点底部按钮统一确认放行训练"
+        />
+        <div
+          v-for="batch in reviewBatches"
+          :key="batch.batchId"
+          class="review-batch"
+        >
+          <div
+            v-for="job in batch.jobs"
+            :key="job.id"
+            class="review-job"
+          >
+            <div class="review-job-head">
+              <div>
+                <span class="job-name">{{ job.projectName }}</span>
+                <span class="job-nickname">{{ job.nickname || '未解析' }}</span>
+                <el-tag
+                  :type="reviewCount(job) < job.params.minImages ? 'danger' : 'success'"
+                  size="small"
+                  class="stage-tag"
+                >
+                  {{ reviewCount(job) }} 张 / 下限 {{ job.params.minImages }}
+                </el-tag>
+              </div>
+              <div>
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  @click="openDir(job.paths.datasetDir)"
+                >
+                  打开目录
+                </el-button>
+                <el-button
+                  link
+                  type="warning"
+                  size="small"
+                  @click="recropJob(job)"
+                >
+                  重新裁切
+                </el-button>
+              </div>
+            </div>
+            <div
+              v-if="reviewLoading[job.id]"
+              class="review-loading"
+            >
+              素材加载中…
+            </div>
+            <div
+              v-else-if="!reviewCount(job)"
+              class="review-loading"
+            >
+              暂无素材
+            </div>
+            <div class="dataset-grid">
+              <div
+                v-for="img in reviewImages[job.id] || []"
+                :key="img.path"
+                class="dataset-cell"
+              >
+                <el-image
+                  :src="img.thumb"
+                  fit="cover"
+                  class="dataset-thumb"
+                />
+                <el-button
+                  class="dataset-delete"
+                  type="danger"
+                  size="small"
+                  circle
+                  @click="deleteReviewImage(job, img)"
+                >
+                  <el-icon><Close /></el-icon>
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <el-empty
+        v-else
+        description="没有待确认的任务"
+      />
+      <template #footer>
+        <div class="review-footer">
+          <el-text
+            v-if="hasReviewUnderLimit"
+            type="danger"
+            size="small"
+          >
+            有任务素材低于下限，需补回素材或重新裁切后才能统一确认
+          </el-text>
+          <el-text
+            v-else
+            type="info"
+            size="small"
+          >
+            将一次性确认 {{ awaitingJobs.length }} 个任务、共 {{ totalReviewImages }} 张素材
+          </el-text>
+          <el-button
+            type="primary"
+            :disabled="hasReviewUnderLimit || !awaitingJobs.length"
+            :loading="confirming"
+            @click="confirmAllBatches"
+          >
+            全部确认，开始训练
+          </el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -466,7 +617,8 @@ import {
     getLoraBatchConfig,
     setLoraBatchConfig,
     listLoraBatchJobs,
-    createLoraBatchJob,
+    createLoraBatchJobs,
+    confirmLoraBatchJobs,
     stopLoraBatchJob,
     retryLoraBatchJob,
     removeLoraBatchJob,
@@ -504,6 +656,10 @@ export default {
             detailJobId: '',
             datasetImages: [],
             datasetLoading: false,
+            reviewVisible: false,
+            reviewImages: {},
+            reviewLoading: {},
+            confirming: false,
             paramTags: [
                 '下载作品 15 个',
                 '视频抽帧 3 张',
@@ -516,6 +672,34 @@ export default {
     computed: {
         detailJob() {
             return this.jobs.find((job) => job.id === this.detailJobId) || null;
+        },
+        awaitingJobs() {
+            return this.jobs.filter((job) => job.status === 'awaiting_confirm');
+        },
+        reviewBatches() {
+            const map = new Map();
+            this.awaitingJobs.forEach((job) => {
+                if (!map.has(job.batchId)) map.set(job.batchId, []);
+                map.get(job.batchId).push(job);
+            });
+            return Array.from(map, ([batchId, jobs]) => ({ batchId, jobs }));
+        },
+        totalReviewImages() {
+            return this.awaitingJobs.reduce((sum, job) => sum + this.reviewCount(job), 0);
+        },
+        hasReviewUnderLimit() {
+            return this.awaitingJobs
+                .some((job) => this.reviewCount(job) < job.params.minImages);
+        },
+    },
+    watch: {
+        awaitingJobs(jobs) {
+            if (!this.reviewVisible) return;
+            jobs.forEach((job) => {
+                if (!(job.id in this.reviewImages)) {
+                    this.loadReviewImages(job);
+                }
+            });
         },
     },
     mounted() {
@@ -603,11 +787,15 @@ export default {
             }
             this.creating = true;
             try {
-                const job = await createLoraBatchJob({
+                const ret = await createLoraBatchJobs({
                     profileUrlText: this.form.profileUrlText,
                     projectName: this.form.projectName,
                 });
-                this.$message.success(`任务 ${job.projectName} 已创建并开始`);
+                const count = (ret.jobs || []).length;
+                this.$message.success(`已创建 ${count} 个训练任务，裁切完成后请在批量审核中统一确认`);
+                if (ret.errors && ret.errors.length) {
+                    this.$message.warning(ret.errors.join('；'));
+                }
                 this.form.profileUrlText = '';
                 this.form.projectName = '';
                 await this.loadJobs();
@@ -695,6 +883,9 @@ export default {
                 await recropLoraBatchJob(job.id);
                 this.$message.success('已重新入队，将重新裁切');
                 this.datasetImages = [];
+                if (this.reviewVisible) {
+                    this.reviewImages = { ...this.reviewImages, [job.id]: [] };
+                }
                 await this.loadJobs();
             } catch (err) {
                 if (err !== 'cancel') this.$message.error(err.message || err);
@@ -713,6 +904,68 @@ export default {
                 await this.loadJobs();
             } catch (err) {
                 if (err !== 'cancel') this.$message.error(err.message || err);
+            }
+        },
+        reviewCount(job) {
+            return (this.reviewImages[job.id] || []).length;
+        },
+        async openReview() {
+            this.reviewVisible = true;
+            this.reviewImages = {};
+            this.reviewLoading = {};
+            await Promise.all(this.awaitingJobs.map((job) => this.loadReviewImages(job)));
+        },
+        async loadReviewImages(job) {
+            this.reviewLoading = { ...this.reviewLoading, [job.id]: true };
+            try {
+                const ret = await listSmartCutImages(job.paths.datasetDir);
+                this.reviewImages = {
+                    ...this.reviewImages,
+                    [job.id]: (ret && ret.images) || [],
+                };
+            } catch (err) {
+                this.$message.error(`素材读取失败：${err.message || err}`);
+            } finally {
+                this.reviewLoading = { ...this.reviewLoading, [job.id]: false };
+            }
+        },
+        async deleteReviewImage(job, img) {
+            try {
+                await this.$confirm(`删除素材 ${img.name}？`, '确认', { type: 'warning' });
+                await deleteSmartCutFile(img.path, job.paths.datasetDir);
+                await this.loadReviewImages(job);
+                await this.loadJobs();
+            } catch (err) {
+                if (err !== 'cancel') this.$message.error(err.message || err);
+            }
+        },
+        async confirmAllBatches() {
+            if (this.hasReviewUnderLimit) {
+                this.$message.warning('有任务素材低于下限，请先补回素材或重新裁切');
+                return;
+            }
+            try {
+                await this.$confirm(
+                    `确认 ${this.awaitingJobs.length} 个任务的素材合格，并开始串行训练？`,
+                    '批量确认',
+                    { type: 'warning', confirmButtonText: '全部确认，开始训练' },
+                );
+            } catch (err) {
+                if (err === 'cancel') return;
+                throw err;
+            }
+            this.confirming = true;
+            try {
+                for (const batch of this.reviewBatches) {
+                    await confirmLoraBatchJobs(batch.batchId);
+                }
+                this.$message.success('已全部确认，训练任务开始排队执行');
+                this.reviewVisible = false;
+                await this.loadJobs();
+            } catch (err) {
+                this.$message.error(err.message || err);
+            } finally {
+                this.confirming = false;
             }
         },
         async openDetail(job) {
@@ -899,6 +1152,50 @@ export default {
 .confirm-actions {
   display: flex;
   gap: 10px;
+}
+.review-entry-card {
+  border-left: 4px solid #e6a23c;
+}
+.review-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.review-entry-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.review-entry-desc {
+  color: #909399;
+  font-size: 12px;
+}
+.review-batch {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.review-job {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 14px;
+}
+.review-job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.review-loading {
+  color: #909399;
+  font-size: 13px;
+  padding: 12px 0;
+}
+.review-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .detail-title {
   margin: 16px 0 12px;

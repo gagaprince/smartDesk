@@ -51,6 +51,8 @@ export const HandleEvents = {
     LORA_BATCH_SET_CONFIG: 'lora_batch_set_config',
     LORA_BATCH_LIST_JOBS: 'lora_batch_list_jobs',
     LORA_BATCH_CREATE_JOB: 'lora_batch_create_job',
+    LORA_BATCH_CREATE_BATCH: 'lora_batch_create_batch',
+    LORA_BATCH_CONFIRM_BATCH: 'lora_batch_confirm_batch',
     LORA_BATCH_STOP_JOB: 'lora_batch_stop_job',
     LORA_BATCH_RETRY_JOB: 'lora_batch_retry_job',
     LORA_BATCH_REMOVE_JOB: 'lora_batch_remove_job',

@@ -144,6 +144,8 @@ export const getLoraBatchConfig = async () => ipcRenderer.invoke(HandleEvents.LO
 export const setLoraBatchConfig = async (patch) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_SET_CONFIG, patch);
 export const listLoraBatchJobs = async () => ipcRenderer.invoke(HandleEvents.LORA_BATCH_LIST_JOBS);
 export const createLoraBatchJob = async (payload) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_CREATE_JOB, payload);
+export const createLoraBatchJobs = async (payload) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_CREATE_BATCH, payload);
+export const confirmLoraBatchJobs = async (batchId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_CONFIRM_BATCH, batchId);
 export const stopLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_STOP_JOB, jobId);
 export const retryLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_RETRY_JOB, jobId);
 export const removeLoraBatchJob = async (jobId) => ipcRenderer.invoke(HandleEvents.LORA_BATCH_REMOVE_JOB, jobId);

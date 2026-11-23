@@ -130,7 +130,7 @@ export function removeJob(id) {
     return true;
 }
 
-export function createJobRecord({ profileUrl, projectName }) {
+export function createJobRecord({ profileUrl, projectName, batchId }) {
     const now = Date.now();
     const id = `lb_${now}_${Math.random().toString(36).slice(2, 8)}`;
     const jobDir = path.resolve(config.workspaceDir, projectName);
@@ -140,6 +140,7 @@ export function createJobRecord({ profileUrl, projectName }) {
     });
     return {
         id,
+        batchId: batchId || id,
         profileUrl,
         nickname: '',
         userId: '',
@@ -198,6 +199,25 @@ export const suggestProjectName = () => {
     const pad = (n) => String(n).padStart(2, '0');
     return `face_${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 };
+
+// 批量创建时同分钟内会撞名, 基于 base 追加序号直到不冲突
+export function uniqueProjectName(base) {
+    let name = base;
+    let seq = 1;
+    while (projectNameExists(name)) {
+        name = `${base}-${String(seq).padStart(2, '0')}`;
+        seq += 1;
+    }
+    return name;
+}
+
+export const newBatchId = () => `lbb_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+export const listJobsByBatch = (batchId) => store.jobs.filter((job) => job.batchId === batchId);
+
+// 批次内是否还有任务停在人工确认卡口(训练阶段的放行屏障)
+export const batchHasAwaiting = (batchId) => store.jobs
+    .some((job) => job.batchId === batchId && job.status === 'awaiting_confirm');
 
 // 从整段分享文案中提取主页链接, 兼容 https\:// 转义与尾部标点
 export function extractProfileUrl(text) {
