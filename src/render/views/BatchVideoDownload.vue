@@ -244,7 +244,7 @@
     </el-dialog>
     <el-dialog
       v-model="profileDialogVisible"
-      :title="`小红书主页作品（共 ${profileNotes.length} 条，已选 ${profileSelected.length} 条）`"
+      :title="`主页作品（共 ${profileNotes.length} 条，已选 ${profileSelected.length} 条）`"
       width="860px"
       :close-on-click-modal="false"
     >
@@ -336,6 +336,7 @@ import {
     getXhsLoginStatus,
     xhsLogout,
     xhsParseProfile,
+    dyParseProfile,
 } from '@/render/common/ipcUtil';
 import TaskListComponent from '@/render/components/tasklist/index.vue';
 
@@ -439,6 +440,9 @@ export default {
         _isXhsLink(link) {
             return link.indexOf('xhslink') !== -1 || link.indexOf('xiaohongshu.com') !== -1;
         },
+        _isDyLink(link) {
+            return link.indexOf('douyin') !== -1;
+        },
         async download() {
             const originLinks = this.formObj.originLinks;
             if (!originLinks || !originLinks.trim()) {
@@ -462,7 +466,8 @@ export default {
             try {
                 for (const line of lines) {
                     if (line && line.trim()) {
-                        const link = this._getRealLink(line);
+                        // 分享文案里的链接常被转义成 https\://，先去掉反斜杠再提取
+                        const link = this._getRealLink(line.replace(/\\/g, ''));
                         if (!link) {
                             this.errorMsgs.push(`无法从内容中解析链接: ${line}`);
                         } else if (this._isXhsLink(link)) {
@@ -478,6 +483,31 @@ export default {
                                     if (!profileNotesMap.has(note.noteId)) {
                                         profileNotesMap.set(note.noteId, {
                                             ...note,
+                                            platform: 'xhs',
+                                            user: (ret.user && ret.user.nickname) || '',
+                                            profileUrl: ret.profileUrl,
+                                        });
+                                    }
+                                });
+                            } else if (ret && ret.errorMsg) {
+                                this.errorMsgs.push(ret.errorMsg);
+                            } else {
+                                normalItems.push({ link: (ret && ret.realLink) || link, options: { link } });
+                            }
+                        } else if (this._isDyLink(link)) {
+                            const ret = await dyParseProfile(link, parseOptions);
+                            if (ret && ret.isProfile) {
+                                if (ret.notice && !this.noticeMsgs.includes(ret.notice)) {
+                                    this.noticeMsgs.push(ret.notice);
+                                }
+                                if (ret.user && ret.user.nickname && !profileUsers.includes(ret.user.nickname)) {
+                                    profileUsers.push(ret.user.nickname);
+                                }
+                                (ret.notes || []).forEach((note) => {
+                                    if (!profileNotesMap.has(note.noteId)) {
+                                        profileNotesMap.set(note.noteId, {
+                                            ...note,
+                                            platform: 'dy',
                                             user: (ret.user && ret.user.nickname) || '',
                                             profileUrl: ret.profileUrl,
                                         });
@@ -512,6 +542,26 @@ export default {
             }
         },
         buildProfileDownloadItem(note) {
+            if (note.platform === 'dy') {
+                // 弹窗表格里的 note 是 Vue 响应式 Proxy，嵌套数组无法被 IPC 结构化克隆，先转成纯对象
+                const options = {
+                    link: note.noteUrl,
+                    dyWindowParse: true,
+                    awemeId: note.awemeId,
+                    user: note.user,
+                    desc: note.title,
+                    type: note.type,
+                    cover: note.cover,
+                    videoUrl: note.videoUrl || '',
+                    images: [...(note.images || [])],
+                    imageExts: [...(note.imageExts || [])],
+                    liveVideos: [...(note.liveVideos || [])],
+                };
+                return {
+                    link: note.noteUrl,
+                    options: JSON.parse(JSON.stringify(options)),
+                };
+            }
             return {
                 link: note.noteUrl,
                 options: {

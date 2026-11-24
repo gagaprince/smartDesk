@@ -19,6 +19,8 @@ export const HandleEvents = {
     XHS_LOGIN_STATUS: 'xhs_login_status',
     XHS_LOGOUT: 'xhs_logout',
     XHS_PARSE_PROFILE: 'xhs_parse_profile',
+    // 抖音个人主页批量解析（匿名访问，网页端返回首屏约 18 条作品）
+    DY_PARSE_PROFILE: 'dy_parse_profile',
     // 一键裁切头像（Python headcut 子项目）
     HEAD_CUT: 'head_cut',
     HEAD_CUT_STOP: 'head_cut_stop',

@@ -1,6 +1,7 @@
 import { registHandle } from '../ipc';
 import { HandleEvents } from '@/common/eventConst';
 import { parseDyShareLink } from '@/server/lib/dy/dyBrowser';
+import { buildDySnapshotInfo } from '@/server/lib/dy/dyProfileParser';
 import { getVideoInfoFromDLpanda } from '@/server/lib/tt/ttParser';
 import { getVideoInfoByLinkFromKs } from '@/server/lib/ks/ksParser';
 import { getVideoInfoByXHSLink } from '@/server/lib/xhs/xhsParser';
@@ -11,8 +12,22 @@ import { formatDay } from '../util/date';
 
 const path = require('path');
 const fs = require('fs');
+const { app } = require('electron');
 
 const MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1';
+// 单个作品（含可能的浏览器回退解析）总耗时上限，超时按失败跳过，保证整批不会被一条任务冻死
+const WORK_OVERALL_TIMEOUT_MS = 240000;
+
+// 下载相关诊断日志，便于在看不到主进程控制台时定位失败原因
+const logDownload = (msg) => {
+    try {
+        const file = path.resolve(app.getPath('userData'), 'SmartDesk', 'video-download.log');
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.appendFileSync(file, `${new Date().toISOString()} ${msg}\n`);
+    } catch (e) {
+        // 日志失败不影响下载主流程
+    }
+};
 
 const getImgExt = (url) => {
     const match = (url || '').match(/\.(jpeg|jpg|png|webp|gif|bmp)(\?|$)/i);
@@ -20,7 +35,17 @@ const getImgExt = (url) => {
 };
 
 // 获取短视频内容
-async function getVideoInfoByDYLink(originLink) {
+async function getVideoInfoByDYLink(originLink, options) {
+    // 主页批量解析已拿到接口直链快照，直接消费，避免逐条跳详情页（签名 URL 会过期，拿不到时再回退窗口解析）
+    if (options && options.dyWindowParse) {
+        const snapshot = buildDySnapshotInfo(options);
+        if (snapshot.videoUrl || (snapshot.images && snapshot.images.length)) {
+            return {
+                ...snapshot,
+                downloadRefer: originLink,
+            };
+        }
+    }
     const videoInfo = await parseDyShareLink(originLink);
     if (videoInfo && videoInfo.errorMsg) {
         return videoInfo;
@@ -104,7 +129,7 @@ export const getVideoInfoByLink = async (link, options) => {
     };
 };
 
-export const downloadSmallVideoByLink = async (link, options = {}) => {
+async function runDownload(link, options = {}) {
     const info = await getVideoInfoByLink(link, options);
     if (info) {
         console.log(info);
@@ -122,21 +147,33 @@ export const downloadSmallVideoByLink = async (link, options = {}) => {
         if (!fs.existsSync(fileDir)) {
             fs.mkdirSync(fileDir, { recursive: true }); // recursive选项确保创建嵌套目录
         }
-        const startDownload = (url, filePath, headers = null) => new Promise((res) => {
-            const downloader = new Download({
-                url,
-                filePath,
-                headers: headers || undefined,
-                success: () => {
-                    res(filePath);
-                },
-                fail: (e) => {
-                    global.logRender('下载出错：', e);
-                    console.log(`Error: ${e}`);
-                    res('');
-                },
-            });
-            downloader.startDownload();
+        // 单个文件最多再重试 2 次：抖音 CDN 偶发“响应头到达但 body 挂起”，退避后重试通常可成功
+        const MAX_DOWNLOAD_RETRY = 2;
+        const startDownload = (url, filePath, headers = null) => new Promise((resolve) => {
+            let attempt = 0;
+            const runOnce = () => {
+                const downloader = new Download({
+                    url,
+                    filePath,
+                    headers: headers || undefined,
+                    success: () => {
+                        resolve(filePath);
+                    },
+                    fail: (e) => {
+                        attempt += 1;
+                        global.logRender('下载出错：', e);
+                        console.log(`download attempt ${attempt} failed: ${e}`);
+                        if (attempt <= MAX_DOWNLOAD_RETRY) {
+                            setTimeout(runOnce, attempt * 1000);
+                        } else {
+                            logDownload(`download failed after ${attempt} attempts: ${url} :: ${e && e.message}`);
+                            resolve('');
+                        }
+                    },
+                });
+                downloader.startDownload();
+            };
+            runOnce();
         });
         if (type === 'video') {
             const filePath = path.resolve(fileDir, `${Date.now()}.mp4`);
@@ -169,6 +206,26 @@ export const downloadSmallVideoByLink = async (link, options = {}) => {
         }
     }
     return info;
+}
+
+// 对外处理入口：竞速一个整体超时，任何环节挂起都按失败返回，保证串行队列继续往后走
+export const downloadSmallVideoByLink = async (link, options = {}) => {
+    let timer = null;
+    const timeout = new Promise((resolve) => {
+        timer = setTimeout(() => {
+            logDownload(`overall timeout, skip: ${link}`);
+            resolve({ errorMsg: '单个作品处理超时，已自动跳过' });
+        }, WORK_OVERALL_TIMEOUT_MS);
+    });
+    try {
+        const result = await Promise.race([runDownload(link, options), timeout]);
+        if (result && result.errorMsg) {
+            logDownload(`work failed: ${link} :: ${result.errorMsg}`);
+        }
+        return result;
+    } finally {
+        clearTimeout(timer);
+    }
 };
 
 registHandle(HandleEvents.GET_VIDEO_INFO, getVideoInfoByLink);

@@ -88,6 +88,9 @@ export const getXhsLoginStatus = async () => ipcRenderer.invoke(HandleEvents.XHS
 export const xhsLogout = async () => ipcRenderer.invoke(HandleEvents.XHS_LOGOUT);
 export const xhsParseProfile = async (link, options) => ipcRenderer.invoke(HandleEvents.XHS_PARSE_PROFILE, link, options);
 
+// 抖音个人主页批量解析（匿名访问，网页端返回首屏约 18 条作品）
+export const dyParseProfile = async (link, options) => ipcRenderer.invoke(HandleEvents.DY_PARSE_PROFILE, link, options);
+
 // 一键裁切头像
 export const runHeadCut = async (options) => ipcRenderer.invoke(HandleEvents.HEAD_CUT, options);
 export const stopHeadCut = async () => ipcRenderer.invoke(HandleEvents.HEAD_CUT_STOP);
